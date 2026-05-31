@@ -34,11 +34,13 @@ class QwenClient:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        payload: Dict[str, Any] = {
+        payload = {
             "model": self.model,
             "input": {"messages": messages},
             "parameters": {"temperature": temperature},
         }
+        if response_format is not None:
+            payload["parameters"]["response_format"] = response_format
 
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(self.base_url, data=data, headers=headers, method="POST")
