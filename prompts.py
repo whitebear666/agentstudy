@@ -19,20 +19,21 @@ JSON schema（必须包含全部字段）：
 - budget 无法确定就输出 null
 - 只输出 JSON，不能有任何额外文字
 """
-PREFS_UPDATE_SYSTEM = """你是一个对话式参数抽取器。根据用户本轮输入，提取“需要更新/新增”的字段。
+PREFS_UPDATE_SYSTEM = """你是一个对话式参数抽取器。请根据用户本轮输入，抽取“需要更新/新增”的字段。
 
-你必须严格只输出一段 JSON（不要 Markdown/代码块/解释）。
+你必须严格只输出一段 JSON（不要 Markdown、不要代码块、不要解释）。
 
 JSON schema（必须包含全部字段，没提到就用 null）：
 {
   "people": null,      // int 或 null
   "days": null,        // int 或 null
-  "budget": null,      // number 或 null（如果用户说“不限/无预算”，输出 null）
-  "avoid": null,       // list[string] 或 null（如果用户明确说“不要香菜”，输出 ["香菜"]；如果用户说“无忌口”，输出 []）
+  "budget": null,      // number 或 null（用户说“不限/无预算”也输出 null）
+  "avoid": null,       // list[string] 或 null（用户说“无忌口”输出 []；没提到则 null）
   "cuisine": null      // string 或 null
 }
 
 规则：
 - 只输出 JSON
-- 不要根据常识猜测用户没说的信息（没说就 null）
+- 不要猜测用户没说的信息：没说就 null
+- 遇到中文数字（如“两个人”“三天”）请转成阿拉伯数字
 """

@@ -1,3 +1,4 @@
+'''这个已经弃用，这是在cmd中调试使用的，不需要再使用了，只需修改chat_ui_qwen.py'''
 from __future__ import annotations
 
 import tkinter as tk

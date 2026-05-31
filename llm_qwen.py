@@ -18,7 +18,8 @@ class QwenClient:
     model: str = "qwen-turbo"
     base_url: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
 
-    def generate(self, prompt: str, system: Optional[str] = None, temperature: float = 0.2) -> str:
+    def generate(self, prompt: str, system: Optional[str] = None, temperature: float = 0.2,
+                 response_format: Optional[dict] = None) -> str:
         """
         Minimal text generation call.
         Returns the generated text (best-effort).
@@ -40,6 +41,7 @@ class QwenClient:
             "parameters": {"temperature": temperature},
         }
         if response_format is not None:
+            payload.setdefault("parameters", {})
             payload["parameters"]["response_format"] = response_format
 
         data = json.dumps(payload).encode("utf-8")
