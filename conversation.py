@@ -1,4 +1,3 @@
-# conversation.py
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -17,6 +16,9 @@ class ConversationState:
         avoid=None,
         cuisine="家常",
         has_kitchen=True,
+        breakfast_style=None,
+        lunch_style=None,
+        dinner_style=None,
     ))
 
     # 对话历史（目前主要用于未来扩展；追问逻辑不再依赖 history 猜测）
@@ -27,9 +29,9 @@ class ConversationState:
 
     def update_from_partial(self, partial: Dict[str, Any]) -> None:
         """
-        partial: {"people":..., "days":..., "budget":..., "avoid":..., "cuisine":...}
+        partial: {"people":..., "days":..., "budget":..., "avoid":..., "cuisine":..., ...}
         约定：
-          - None 表示“本轮没提/不更新”（除 budget 外：budget 允许 None 表示‘不限’，由 extractor 决定是否带键）
+          - None 表示“本轮没提/不更新”（除 budget 外：budget 允许 None 表示‘不限’，由 extractor/command 决定是否带键）
           - avoid: [] 表示“无忌口/清空忌口”
         """
         if "people" in partial and partial["people"] is not None:
@@ -53,6 +55,15 @@ class ConversationState:
         if "cuisine" in partial and partial["cuisine"]:
             self.prefs.cuisine = str(partial["cuisine"]).strip()
             self.confirmed_fields.add("cuisine")
+
+        # 餐次级偏好（仅用户明确说到才更新）
+        if "breakfast_style" in partial and partial["breakfast_style"]:
+            self.prefs.breakfast_style = str(partial["breakfast_style"]).strip()
+            self.confirmed_fields.add("breakfast_style")
+
+        if "lunch_style" in partial and partial["lunch_style"]:
+            self.prefs.lunch_style = str(partial["lunch_style"]).strip()
+            self.confirmed_fields.add("lunch_style")
 
         if "dinner_style" in partial and partial["dinner_style"]:
             self.prefs.dinner_style = str(partial["dinner_style"]).strip()

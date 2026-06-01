@@ -13,6 +13,7 @@ from prefs_extractor import extract_prefs_update_with_qwen, PrefsExtractError
 from tools import WriteJsonTool
 
 
+
 HELP_TEXT = (
     "你可以用自然语言描述需求，我会记住并可多轮修改。\n\n"
     "示例：\n"

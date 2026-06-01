@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict
 
 from command_schema import Command
 from llm_qwen import get_qwen_client
@@ -29,6 +28,7 @@ def parse_command_with_qwen(user_text: str, retries: int = 1) -> Command:
                 raise CommandParseError(f"Model output is not a JSON object: {raw}")
 
             return Command.from_dict(data)
+
         except Exception as e:
             last_err = e
 
