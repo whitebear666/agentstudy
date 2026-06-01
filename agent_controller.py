@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+from command_parser import parse_command_with_qwen, CommandParseError
 from typing import Dict, Any, List
 
 from agent import GroceryMealAgent
@@ -35,6 +36,7 @@ def _prefs_to_dict(prefs) -> Dict[str, Any]:
         "avoid": prefs.avoid or [],
         "cuisine": prefs.cuisine,
         "has_kitchen": prefs.has_kitchen,
+        "dinner_style": getattr(prefs, "dinner_style", None),
     }
 
 
@@ -115,6 +117,40 @@ class AgentController:
             return "请输入你的需求。"
 
         self.state.history.append({"role": "user", "content": text})
+
+        def handle_user_message(self, text: str) -> str:
+            text = (text or "").strip()
+            if not text:
+                return "请输入你的需求。"
+
+            self.state.history.append({"role": "user", "content": text})
+
+            # 1) 优先：让大模型解析为“结构化命令”，能解析就直接执行
+            try:
+                cmd = parse_command_with_qwen(text, retries=1)
+
+                # 有 updates 才入撤销栈（避免“完成/生成”也压栈）
+                if cmd.updates and any(v is not None for v in cmd.updates.values()) or cmd.updates.get("avoid") == []:
+                    self._undo_stack.append(copy.deepcopy(self.state))
+                    self.state.update_from_partial(cmd.updates)
+
+                if cmd.intent == "help":
+                    return HELP_TEXT
+                if cmd.intent == "undo":
+                    return self.undo()
+                if cmd.intent == "reset":
+                    return self.reset()
+                if cmd.intent == "show_prefs":
+                    return self.show_prefs()
+                if cmd.intent == "generate":
+                    return self.generate()
+
+                # update_prefs
+                return "我记住了。\n" + self._format_next_step_hint()
+
+            except CommandParseError:
+                # 解析失败则回退旧逻辑
+                pass
 
         intent = detect_intent(text).type
 

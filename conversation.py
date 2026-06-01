@@ -53,3 +53,7 @@ class ConversationState:
         if "cuisine" in partial and partial["cuisine"]:
             self.prefs.cuisine = str(partial["cuisine"]).strip()
             self.confirmed_fields.add("cuisine")
+
+        if "dinner_style" in partial and partial["dinner_style"]:
+            self.prefs.dinner_style = str(partial["dinner_style"]).strip()
+            self.confirmed_fields.add("dinner_style")

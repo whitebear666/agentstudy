@@ -32,7 +32,7 @@ def detect_intent(text: str) -> Intent:
     if any(k in t for k in ["当前", "偏好", "参数", "你记住了什么", "show"]):
         return Intent("show_prefs")
 
-    if any(k in t for k in ["生成", "开始", "输出", "做吧", "go", "run"]):
+    if any(k in t for k in ["生成", "开始", "输出", "做吧", "go", "run", "完成", "好了", "就这样", "ok"]):
         return Intent("generate")
 
     return Intent("update_prefs")

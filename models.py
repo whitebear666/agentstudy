@@ -13,6 +13,9 @@ class UserPrefs:
     cuisine: str = "家常"
     has_kitchen: bool = True
 
+    # 新增：仅晚餐偏好（“晚餐清淡点/晚饭微辣”）
+    dinner_style: Optional[str] = None
+
 
 @dataclass
 class Meal:
