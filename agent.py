@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import random
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 from models import UserPrefs, Meal, DayPlan, MealSet
 from tools import ReadJsonTool, WriteJsonTool, WriteTextTool
 from skills.meal_composer import MealComposerSkill, CandidateMeal
-
 
 DEFAULT_RECIPE_DB = [
     Meal(
@@ -130,8 +129,15 @@ class GroceryMealAgent:
             ok.append(r)
         return ok
 
-    def _prefer_by_tags(self, meals: List[Meal], prefs: UserPrefs) -> List[Meal]:
-        cuisine = (prefs.cuisine or "").strip()
+    def _prefer_by_style(self, meals: List[Meal], style: Optional[str]) -> List[Meal]:
+        """
+        通用偏好排序：根据 style 字符串排序菜品。
+        style 可以是 None / "清淡" / "川菜" / "家常" / "微辣" 等任意字符串。
+        """
+        if not style:
+            return meals
+
+        style_str = (style or "").strip()
 
         def score(meal: Meal) -> int:
             tags = self.recipe_meta.get(meal.name, {})
@@ -140,7 +146,7 @@ class GroceryMealAgent:
             methods = set(_tag_list(tags, "method"))
 
             s = 0
-            if "清淡" in cuisine:
+            if "清淡" in style_str:
                 if "清淡" in styles:
                     s += 6
                 if spicy in ("none", "mild"):
@@ -148,13 +154,13 @@ class GroceryMealAgent:
                 if methods & {"蒸", "煮", "拌"}:
                     s += 1
 
-            if ("川" in cuisine) or ("辣" in cuisine) or ("微辣" in cuisine):
+            if ("川" in style_str) or ("辣" in style_str) or ("微辣" in style_str):
                 if "川湘" in styles:
                     s += 6
                 if spicy in ("medium", "hot"):
                     s += 3
 
-            if "家常" in cuisine:
+            if "家常" in style_str:
                 if "家常" in styles:
                     s += 3
 
@@ -191,14 +197,25 @@ class GroceryMealAgent:
         if not meals:
             meals = DEFAULT_RECIPE_DB
 
-        meals = self._prefer_by_tags(meals, prefs)
+        # 每一餐用自己的 style，如果没有则回退到全局 cuisine
+        breakfast_style = prefs.breakfast_style or prefs.cuisine
+        lunch_style = prefs.lunch_style or prefs.cuisine
+        dinner_style = prefs.dinner_style or prefs.cuisine
 
-        breakfast_pool = self._pool(meals, "breakfast")
-        main_pool = self._pool(meals, "dinner")  # 午晚餐都用正餐池
+        # 分别排序：早餐/午餐/晚餐各自按自己的 style 偏好
+        meals_breakfast = self._prefer_by_style(meals, breakfast_style)
+        meals_lunch = self._prefer_by_style(meals, lunch_style)
+        meals_dinner = self._prefer_by_style(meals, dinner_style)
+
+        # 再分池（按 meal_type 标签）
+        breakfast_pool = self._pool(meals_breakfast, "breakfast")
+        lunch_pool = self._pool(meals_lunch, "dinner")  # lunch 也用"正餐"标签池
+        dinner_pool = self._pool(meals_dinner, "dinner")
 
         # 取前 N 做候选，既贴近偏好又保多样性
         bf_candidates = self._as_candidates(breakfast_pool[: min(len(breakfast_pool), 260)])
-        main_candidates = self._as_candidates(main_pool[: min(len(main_pool), 520)])
+        lunch_candidates = self._as_candidates(lunch_pool[: min(len(lunch_pool), 520)])
+        dinner_candidates = self._as_candidates(dinner_pool[: min(len(dinner_pool), 520)])
 
         day_plans: List[DayPlan] = []
         used_names: set[str] = set()
@@ -215,7 +232,7 @@ class GroceryMealAgent:
 
             lunch = self.composer.compose_mealset(
                 prefs=prefs,
-                candidates=main_candidates,
+                candidates=lunch_candidates,
                 used_names=used_names,
                 want_soup=True,
                 want_staple=True,
@@ -223,7 +240,7 @@ class GroceryMealAgent:
 
             dinner = self.composer.compose_mealset(
                 prefs=prefs,
-                candidates=main_candidates,
+                candidates=dinner_candidates,
                 used_names=used_names,
                 want_soup=True,
                 want_staple=True,
@@ -263,6 +280,12 @@ class GroceryMealAgent:
         lines.append(f"- 人数：{prefs.people}")
         lines.append(f"- 天数：{prefs.days}")
         lines.append(f"- 菜系：{prefs.cuisine}")
+        if prefs.breakfast_style:
+            lines.append(f"- 早餐偏好：{prefs.breakfast_style}")
+        if prefs.lunch_style:
+            lines.append(f"- 午餐偏好：{prefs.lunch_style}")
+        if prefs.dinner_style:
+            lines.append(f"- 晚餐偏好：{prefs.dinner_style}")
         lines.append(f"- 忌口/过敏：{', '.join(prefs.avoid) if prefs.avoid else '无'}")
         lines.append("")
 
@@ -306,8 +329,62 @@ class GroceryMealAgent:
 
         return "\n".join(lines)
 
-    def run(self, prefs: UserPrefs) -> None:
+    def show_current_menu(self, day_plans: List[DayPlan]) -> str:
+        """
+        生成当前菜单的文本表示，供用户查看和决定替换哪一餐。
+        """
+        if not day_plans:
+            return "暂无生成的菜单。"
+
+        lines = ["# 当前菜单规划\n"]
+        for plan in day_plans:
+            lines.append(f"## 第 {plan.day_index} 天")
+
+            # 早餐
+            breakfast_main = plan.breakfast.main.name if plan.breakfast.main else "无"
+            lines.append(f"- **早餐**：{breakfast_main}")
+
+            # 午餐
+            lunch_main = plan.lunch.main.name if plan.lunch.main else "无"
+            lines.append(f"- **午餐**：{lunch_main}")
+
+            # 晚餐
+            dinner_main = plan.dinner.main.name if plan.dinner.main else "无"
+            lines.append(f"- **晚餐**：{dinner_main}")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def run(self, prefs: UserPrefs, save_output: bool = True) -> Tuple[List[DayPlan], Dict[str, str]]:
+        """
+        执行菜单规划。
+
+        参数:
+            prefs: 用户偏好
+            save_output: 是否保存文件到 output/ 目录
+
+        返回:
+            (day_plans, shopping_list): 生成的菜单计划和购物清单
+        """
         plans, shopping = self.plan(prefs)
-        md = self.render_markdown(prefs, plans)
-        self.write_text.run("output/meal_plan.md", md)
-        self.write_json.run("output/shopping_list.json", shopping)
+
+        if save_output:
+            md = self.render_markdown(prefs, plans)
+            self.write_text.run("output/meal_plan.md", md)
+            self.write_json.run("output/shopping_list.json", shopping)
+
+            # 修复：手动构建 prefs 字典，因为 UserPrefs 是 dataclass 不是 Pydantic
+            prefs_dict = {
+                "people": prefs.people,
+                "days": prefs.days,
+                "budget": prefs.budget,
+                "avoid": prefs.avoid,
+                "cuisine": prefs.cuisine,
+                "has_kitchen": prefs.has_kitchen,
+                "breakfast_style": prefs.breakfast_style,
+                "lunch_style": prefs.lunch_style,
+                "dinner_style": prefs.dinner_style,
+            }
+            self.write_json.run("output/prefs.json", prefs_dict)
+
+        return plans, shopping
