@@ -1,5 +1,7 @@
 # agent_controller.py
 from __future__ import annotations
+from skills.shopping_list_optimizer import ShoppingListOptimizer  #购物清单带价格
+from skills.price_fetcher import PriceFetcher #价格获取器
 
 import copy
 import json
@@ -59,6 +61,10 @@ class AgentController:
         self.agent = GroceryMealAgent()
         self.write_json = WriteJsonTool()
         self.replace_skill = MealReplaceSkill()
+        self.shopping_optimizer = ShoppingListOptimizer()  #购物清单带价格
+        self.price_fetcher = PriceFetcher()  #价格获取器
+        self.shopping_optimizer = ShoppingListOptimizer(self.price_fetcher) #价格获取器爬虫
+
 
         # 撤销栈：保存更新前的状态快照
         self._undo_stack: List[ConversationState] = []
@@ -110,10 +116,23 @@ class AgentController:
         except PrefsExtractError:
             return "我记住了。你可以继续补充人数/天数/预算/忌口/口味；确认好后对我说生成。"
 
-    def generate(self) -> str:
+    def generate(self, tk_root=None) -> str:
         qs = _missing_questions(self.state)
         if qs:
             return "在生成前，我还需要确认一下：\n- " + "\n- ".join(qs)
+
+        # 设置用户价格输入回调（如果提供了 tk_root）
+        '''if tk_root:
+            self.shopping_optimizer.set_user_price_callback(
+                lambda name: create_price_input_dialog(tk_root, name)
+            )'''
+
+        # 生成优化后的购物清单（强制刷新价格可选）
+        '''optimized_shopping = self.shopping_optimizer.optimize(
+            shopping,
+            budget=prefs.budget,
+            force_refresh_price=False  # 设为 True 可强制刷新
+        )'''
 
         prefs = self.state.prefs
 
@@ -128,6 +147,16 @@ class AgentController:
         self.current_shopping = shopping
         self.current_prefs = copy.deepcopy(prefs)
 
+        # 生成优化后的购物清单
+        optimized_shopping = self.shopping_optimizer.optimize(shopping, prefs.budget)
+
+        # 保存优化后的购物清单（JSON 格式）
+        self.write_json.run("output/shopping_list_optimized.json", optimized_shopping)
+
+        # 保存 Markdown 格式的购物清单
+        shopping_md = self.shopping_optimizer.to_markdown(optimized_shopping)
+        self.agent.write_text.run("output/shopping_list.md", shopping_md)
+
         # 生成简短的菜单预览
         preview = self.agent.show_current_menu(plans)
 
@@ -135,7 +164,9 @@ class AgentController:
             "生成完成。请查看输出文件：\n"
             "- output/prefs.json\n"
             "- output/meal_plan.md\n"
-            "- output/shopping_list.json\n\n"
+            "- output/shopping_list.json（原始清单）\n"
+            "- output/shopping_list_optimized.json（分类优化清单）\n"
+            "- output/shopping_list.md（可读版）\n\n"
             f"【当前菜单预览】\n{preview}\n\n"
             "如果你想调整某道菜，可以说：\n"
             "- 「把第2天的晚餐主菜换成清淡的」\n"
@@ -287,6 +318,13 @@ class AgentController:
             add_mealset(dp.dinner)
 
         self.current_shopping = need
+
+        # 重新生成优化后的购物清单
+        if self.current_prefs:
+            optimized_shopping = self.shopping_optimizer.optimize(need, self.current_prefs.budget)
+            self.write_json.run("output/shopping_list_optimized.json", optimized_shopping)
+            shopping_md = self.shopping_optimizer.to_markdown(optimized_shopping)
+            self.agent.write_text.run("output/shopping_list.md", shopping_md)
 
     def handle_user_message(self, text: str) -> str:
         text = (text or "").strip()
