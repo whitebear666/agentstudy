@@ -12,6 +12,8 @@ CommandIntent = Literal[
     "help",
     "show_menu",  # 新增：显示当前菜单
     "replace",  # 新增：替换某道菜
+    "show_pantry",      # 新增：查看冰箱
+    "update_pantry",    # 新增：更新冰箱库存
 ]
 
 _ALLOWED_UPDATE_KEYS = {

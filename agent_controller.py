@@ -2,6 +2,7 @@
 from __future__ import annotations
 from skills.shopping_list_optimizer import ShoppingListOptimizer  #购物清单带价格
 from skills.price_fetcher import PriceFetcher #价格获取器
+from skills.pantry_aware import PantryAwareSkill  #冰箱感知
 
 import copy
 import json
@@ -61,7 +62,8 @@ class AgentController:
         self.agent = GroceryMealAgent()
         self.write_json = WriteJsonTool()
         self.replace_skill = MealReplaceSkill()
-        self.shopping_optimizer = ShoppingListOptimizer()  #购物清单带价格
+        self.pantry = PantryAwareSkill()
+
         self.price_fetcher = PriceFetcher()  #价格获取器
         self.shopping_optimizer = ShoppingListOptimizer(self.price_fetcher) #价格获取器爬虫
 
@@ -91,6 +93,65 @@ class AgentController:
     def show_prefs(self) -> str:
         prefs_dict = _prefs_to_dict(self.state.prefs)
         return "当前偏好如下：\n" + json.dumps(prefs_dict, ensure_ascii=False, indent=2)
+
+    def update_pantry(self, text: str) -> str:
+        """解析用户输入并更新冰箱库存（使用大模型）"""
+        print(f"[冰箱调试] 收到: {text}")
+
+        # ===== 直接处理清空命令 =====
+        if "清空" in text and ("冰箱" in text or "库存" in text):
+            print("[冰箱调试] 执行清空操作")
+            self.pantry.clear_all()
+            result = self.pantry.get_summary()
+            print(f"[冰箱调试] 清空后: {result}")
+            return "已清空冰箱库存。\n\n" + result
+        # ===========================
+
+        try:
+            items, action = self.pantry.parse_user_input(text)
+            print(f"[冰箱调试] 大模型解析: action={action}, items={items}")
+
+            if action == "clear":
+                self.pantry.clear_all()
+                return "已清空冰箱库存。\n\n" + self.pantry.get_summary()
+
+            if not items:
+                return "我没能从你的描述中识别出食材。"
+
+            action_names = {"add": "添加", "set": "设置", "remove": "消耗"}
+
+            for item in items:
+                quantity = item["quantity"]
+                name = item["name"]
+                unit = item.get("unit", "个")
+                name = name.replace("我家有", "").replace("冰箱里有", "").strip()
+
+                if action == "remove":
+                    self.pantry.remove_item(name, abs(quantity))
+                elif action == "set":
+                    self.pantry.add_item(name, quantity, unit, mode="set")
+                else:
+                    self.pantry.add_item(name, quantity, unit, mode="add")
+
+            action_cn = action_names.get(action, "更新")
+            return f"已{action_cn} {len(items)} 种食材。\n\n{self.pantry.get_summary()}"
+
+        except Exception as e:
+            print(f"[冰箱调试] 异常: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"解析失败：{e}"
+
+    def show_pantry(self) -> str:
+        """显示当前库存"""
+        return self.pantry.get_summary()
+
+    def use_ingredient(self, name: str, quantity: float = None) -> str:
+        """使用/消耗食材"""
+        success = self.pantry.remove_item(name, quantity)
+        if success:
+            return f"已从库存中扣除「{name}」。\n\n{self.pantry.get_summary()}"
+        return f"未找到「{name}」或库存不足。"
 
     def show_current_menu(self) -> str:
         """显示当前已生成的菜单（如果有）"""
@@ -331,11 +392,40 @@ class AgentController:
         if not text:
             return "请输入你的需求。"
 
+        # ========== 清空冰箱：最高优先级 ==========
+        if text in ["清空冰箱", "清空库存", "重置冰箱", "重置库存", "清空"]:
+            self.pantry.clear_all()
+            return "已清空冰箱库存。\n\n" + self.pantry.get_summary()
+        # ========================================
+        # ========== 冰箱相关命令：最高优先级 ==========
+        # 查看冰箱
+        view_keywords = ["冰箱", "库存", "家里有什么", "查看冰箱", "冰箱有什么", "看冰箱", "冰箱里有啥"]
+        if any(keyword in text for keyword in view_keywords):
+            return self.show_pantry()
+
+        # 更新冰箱库存
+        update_keywords = ["我家有", "冰箱里有", "库存有", "添加食材", "我有", "家里有", "有个",
+                           "新买了", "用了", "吃了", "清空冰箱", "改成", "设置为", "变为"]
+        if any(keyword in text for keyword in update_keywords):
+            return self.update_pantry(text)
+        # ============================================
+
         self.state.history.append({"role": "user", "content": text})
 
         # 1) 优先：让大模型解析为"结构化命令"，能解析就直接执行
         try:
             cmd = parse_command_with_qwen(text, retries=1)
+
+            # ===== 关键修改：在 try 块中再次检查冰箱命令 =====
+            # 防止 LLM 误判为其他意图
+            if cmd.intent == "show_pantry":
+                return self.show_pantry()
+            if cmd.intent == "update_pantry":
+                return self.update_pantry(text)
+            # 如果 LLM 把冰箱命令误判为 replace，也要拦截
+            if cmd.intent == "replace" and any(keyword in text for keyword in update_keywords):
+                return self.update_pantry(text)
+            # ============================================
 
             # 有 updates 才入撤销栈（避免"完成/生成"也压栈）
             if cmd.updates and any(v is not None for v in cmd.updates.values()) or cmd.updates.get("avoid") == []:
@@ -355,14 +445,11 @@ class AgentController:
             if cmd.intent == "generate":
                 return self.generate()
             if cmd.intent == "replace":
-                # 处理替换命令
                 return self._handle_replace_command(cmd)
 
-            # update_prefs
             return "我记住了。\n" + self._format_next_step_hint()
 
         except CommandParseError:
-            # 解析失败则回退旧逻辑
             pass
 
         # 2) 回退：旧 intent + prefs_update
