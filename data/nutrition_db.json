@@ -1,0 +1,44 @@
+{
+  "鸡蛋": {"calories": 155, "protein": 13, "carbs": 1.1, "fat": 11, "unit": "个", "unit_weight": 50},
+  "鸭蛋": {"calories": 185, "protein": 13, "carbs": 1.4, "fat": 14, "unit": "个", "unit_weight": 60},
+  "牛奶": {"calories": 60, "protein": 3, "carbs": 5, "fat": 3.5, "unit": "ml", "unit_weight": 100},
+  "酸奶": {"calories": 70, "protein": 3.5, "carbs": 8, "fat": 2.5, "unit": "g", "unit_weight": 100},
+
+  "猪肉": {"calories": 395, "protein": 14, "carbs": 0, "fat": 37, "unit": "g", "unit_weight": 100},
+  "瘦肉": {"calories": 143, "protein": 20, "carbs": 0, "fat": 6.2, "unit": "g", "unit_weight": 100},
+  "五花肉": {"calories": 518, "protein": 9.3, "carbs": 0, "fat": 53, "unit": "g", "unit_weight": 100},
+  "牛肉": {"calories": 250, "protein": 20, "carbs": 0, "fat": 15, "unit": "g", "unit_weight": 100},
+  "羊肉": {"calories": 282, "protein": 19, "carbs": 0, "fat": 24, "unit": "g", "unit_weight": 100},
+  "鸡肉": {"calories": 165, "protein": 31, "carbs": 0, "fat": 3.6, "unit": "g", "unit_weight": 100},
+  "鸡胸肉": {"calories": 165, "protein": 31, "carbs": 0, "fat": 3.6, "unit": "g", "unit_weight": 100},
+  "鸭肉": {"calories": 337, "protein": 19, "carbs": 0, "fat": 28, "unit": "g", "unit_weight": 100},
+
+  "鱼": {"calories": 150, "protein": 20, "carbs": 0, "fat": 8, "unit": "g", "unit_weight": 100},
+  "虾": {"calories": 85, "protein": 18, "carbs": 1, "fat": 0.8, "unit": "g", "unit_weight": 100},
+
+  "白菜": {"calories": 13, "protein": 1, "carbs": 2.2, "fat": 0.1, "unit": "g", "unit_weight": 100},
+  "菠菜": {"calories": 23, "protein": 2.9, "carbs": 3.6, "fat": 0.4, "unit": "g", "unit_weight": 100},
+  "生菜": {"calories": 15, "protein": 1.4, "carbs": 2.1, "fat": 0.2, "unit": "g", "unit_weight": 100},
+  "油菜": {"calories": 12, "protein": 1.2, "carbs": 1.8, "fat": 0.2, "unit": "g", "unit_weight": 100},
+  "芹菜": {"calories": 14, "protein": 0.8, "carbs": 3, "fat": 0.1, "unit": "g", "unit_weight": 100},
+  "西红柿": {"calories": 18, "protein": 0.9, "carbs": 3.9, "fat": 0.2, "unit": "g", "unit_weight": 100},
+  "番茄": {"calories": 18, "protein": 0.9, "carbs": 3.9, "fat": 0.2, "unit": "g", "unit_weight": 100},
+  "黄瓜": {"calories": 15, "protein": 0.7, "carbs": 3.6, "fat": 0.1, "unit": "g", "unit_weight": 100},
+  "冬瓜": {"calories": 11, "protein": 0.4, "carbs": 2.6, "fat": 0.1, "unit": "g", "unit_weight": 100},
+  "南瓜": {"calories": 26, "protein": 1, "carbs": 6.5, "fat": 0.1, "unit": "g", "unit_weight": 100},
+  "茄子": {"calories": 25, "protein": 1, "carbs": 5.7, "fat": 0.2, "unit": "g", "unit_weight": 100},
+  "土豆": {"calories": 77, "protein": 2, "carbs": 17, "fat": 0.1, "unit": "g", "unit_weight": 100},
+  "胡萝卜": {"calories": 41, "protein": 0.9, "carbs": 9.6, "fat": 0.2, "unit": "g", "unit_weight": 100},
+  "洋葱": {"calories": 40, "protein": 1.1, "carbs": 9.3, "fat": 0.1, "unit": "g", "unit_weight": 100},
+  "西兰花": {"calories": 34, "protein": 2.8, "carbs": 6.6, "fat": 0.4, "unit": "g", "unit_weight": 100},
+  "蘑菇": {"calories": 22, "protein": 3.1, "carbs": 3.3, "fat": 0.3, "unit": "g", "unit_weight": 100},
+
+  "大米": {"calories": 130, "protein": 2.7, "carbs": 28, "fat": 0.3, "unit": "g", "unit_weight": 100},
+  "面粉": {"calories": 364, "protein": 10, "carbs": 76, "fat": 1, "unit": "g", "unit_weight": 100},
+  "面条": {"calories": 138, "protein": 4.5, "carbs": 28, "fat": 1, "unit": "g", "unit_weight": 100},
+
+  "盐": {"calories": 0, "protein": 0, "carbs": 0, "fat": 0, "unit": "g", "unit_weight": 1},
+  "糖": {"calories": 387, "protein": 0, "carbs": 100, "fat": 0, "unit": "g", "unit_weight": 100},
+  "酱油": {"calories": 53, "protein": 6, "carbs": 5, "fat": 0.1, "unit": "ml", "unit_weight": 100},
+  "油": {"calories": 900, "protein": 0, "carbs": 0, "fat": 100, "unit": "g", "unit_weight": 100}
+}

@@ -133,25 +133,22 @@ class ShoppingListOptimizer:
         return ordered_result
 
     def to_markdown(self, optimized: Dict) -> str:
-        """将优化后的购物清单转换为 Markdown 格式（增强版）"""
-        from datetime import datetime
-
+        """将优化后的购物清单转换为 Markdown 格式"""
         lines = ["# 🛒 购物清单\n"]
 
         for category, items in optimized.items():
-            if category == "统计":
+            if category == "统计" or category == "预算报告":
                 continue
             if not items:
                 continue
 
             lines.append(f"## {category}\n")
-            lines.append("| 食材 | 数量 | 单价(元) | 预估价格 | 来源 |")
-            lines.append("|------|------|----------|----------|------|")
+            lines.append("| 食材 | 数量 | 单价(元) | 预估价格 |")
+            lines.append("|------|------|----------|----------|")
             for item in items:
                 lines.append(
                     f"| {item['name']} | {item['qty']}{item['unit']} | "
-                    f"¥{item['unit_price']} | ¥{item['estimated_price']} | "
-                    f"{item.get('price_source', 'default')} |"
+                    f"¥{item['unit_price']} | ¥{item['estimated_price']} |"
                 )
             lines.append("")
 
@@ -166,9 +163,13 @@ class ShoppingListOptimizer:
             lines.append(f"- 预算：¥{stats['预算']}")
             lines.append(f"- 预算剩余：¥{stats['剩余']}")
             if stats.get('是否超支'):
-                lines.append("- ⚠️ 预算超支！可以考虑替换一些高价食材")
+                lines.append("- ⚠️ 预算超支！可以考虑替换掉一些高价食材")
+
+        # 如果有预算报告，添加进去
+        if "预算报告" in optimized:
+            lines.append("\n" + optimized["预算报告"])
 
         lines.append("\n---\n")
-        lines.append("**说明**：价格来源优先级：缓存 > API > 爬虫 > 用户输入 > 参考价")
+        lines.append("**说明**：价格为模拟参考价，实际购买请以当地市场为准。")
 
         return "\n".join(lines)

@@ -68,3 +68,7 @@ class ConversationState:
         if "dinner_style" in partial and partial["dinner_style"]:
             self.prefs.dinner_style = str(partial["dinner_style"]).strip()
             self.confirmed_fields.add("dinner_style")
+
+        if "health_goal" in partial:
+            self.prefs.health_goal = partial["health_goal"]
+            self.confirmed_fields.add("health_goal")

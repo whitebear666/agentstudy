@@ -10,13 +10,15 @@ JSON schema（必须包含全部字段）：
   "days": 3,            // int，天数，默认 3，范围 1-14
   "budget": null,       // number 或 null，预算（人民币）
   "avoid": [],          // string list，忌口/过敏食材关键词（如 香菜、辣椒、牛奶）
-  "cuisine": "家常"     // string，菜系/风格，默认 家常，例如 家常/清淡/川菜/粤菜/减脂
+  "cuisine": "家常",     // string，菜系/风格，默认 家常，例如 家常/清淡/川菜/粤菜/减脂
+  "health_goal": null   // string 或 null，健康目标：减脂/增肌/维持/增重
 }
 
 规则：
-- 如果用户没提某字段，用默认值（people=2, days=3, budget=null, avoid=[], cuisine="家常"）
+- 如果用户没提某字段，用默认值（people=2, days=3, budget=null, avoid=[], cuisine="家常", health_goal=null）
 - avoid 必须是数组；没有忌口输出 []
 - budget 无法确定就输出 null
+- health_goal: 用户说"减脂/减肥/瘦身"→"减脂"，"增肌/长肌肉"→"增肌"，"维持/保持"→"维持"，"增重/长胖"→"增重"
 - 只输出 JSON，不能有任何额外文字
 """
 
@@ -31,13 +33,15 @@ JSON schema（必须包含全部字段，没提到就用 null）：
   "days": null,        // int 或 null
   "budget": null,      // number 或 null（用户说“不限/无预算”也输出 null）
   "avoid": null,       // list[string] 或 null（用户说“无忌口”输出 []；没提到则 null）
-  "cuisine": null      // string 或 null
+  "cuisine": null,     // string 或 null
+  "health_goal": null  // string 或 null，健康目标：减脂/增肌/维持/增重
 }
 
 规则：
 - 只输出 JSON
 - 不要猜测用户没说的信息：没说就 null
 - 遇到中文数字（如“两个人”“三天”）请转成阿拉伯数字
+- health_goal: "减脂/减肥/瘦身"→"减脂"，"增肌/长肌肉"→"增肌"，"维持/保持"→"维持"，"增重/长胖"→"增重"
 """
 
 
@@ -57,7 +61,8 @@ COMMAND_PARSE_SYSTEM = """你是一个“命令解析器”。你的任务是把
     "cuisine": null,          // string 或 null（全局口味：家常/清淡/川菜/粤菜/减脂...）
     "breakfast_style": null,  // string 或 null（仅早餐偏好：清淡/粥/面/不吃甜/少油...）
     "lunch_style": null,      // string 或 null（仅午餐偏好：荤素搭配/清淡/要肉...）
-    "dinner_style": null      // string 或 null（仅晚餐偏好：清淡/少油/微辣/不吃主食...）
+    "dinner_style": null,     // string 或 null（仅晚餐偏好：清淡/少油/微辣/不吃主食...）
+    "health_goal": null       // string 或 null（健康目标：减脂/增肌/维持/增重）
   }
 }
 
@@ -105,13 +110,18 @@ COMMAND_PARSE_SYSTEM = """你是一个“命令解析器”。你的任务是把
 - budget：
   - “预算150/不超过200/控制在100以内” => budget=对应数字（能确定就填）
   - “不限预算/无预算” => budget=null（但仍算用户表达了预算态度）
-
+- health_goal：
+  - “我要减脂/减肥/瘦身” => health_goal="减脂"
+  - “想增肌/长肌肉” => health_goal="增肌"
+  - “维持体重/保持” => health_goal="维持"
+  - “想增重/长胖” => health_goal="增重"
 
 【重要】
 - replace 意图时，updates 字段可为空对象 {}
 - 只输出 JSON，不能有任何额外文字
 - 不要输出代码块标记（```json），只输出纯 JSON 字符串
 """
+
 
 # 冰箱库存解析提示词
 PANTRY_PARSE_SYSTEM = """你是一个冰箱库存解析器。你的任务是把用户的中文输入解析成结构化的库存更新指令。
@@ -145,6 +155,35 @@ JSON schema：
 - "用了2个鸡蛋" → {"action":"remove","items":[{"name":"鸡蛋","quantity":2,"unit":"个"}]}
 - "把鸡蛋改成20个" → {"action":"set","items":[{"name":"鸡蛋","quantity":20,"unit":"个"}]}
 - "清空冰箱" → {"action":"clear","items":[]}
+- "吃了1个西红柿" → {"action":"remove","items":[{"name":"西红柿","quantity":1,"unit":"个"}]}
+
+只输出 JSON，不能有任何额外文字。
+"""
+
+
+# 营养目标解析提示词（新增）
+NUTRITION_GOAL_SYSTEM = """你是一个健康目标解析器。你的任务是把用户的中文输入解析成健康目标。
+
+你必须严格只输出一段 JSON（不要 Markdown、不要代码块、不要解释）。
+
+JSON schema：
+{
+  "health_goal": "减脂"  // 可选值: "减脂" / "增肌" / "维持" / "增重" / null
+}
+
+规则：
+- "减脂/减肥/瘦身/降脂/燃脂" → "减脂"
+- "增肌/长肌肉/练肌肉/增重肌肉" → "增肌"
+- "维持/保持/保持体重/不变" → "维持"
+- "增重/长胖/增加体重" → "增重"
+- 没有明确目标 → null
+
+示例：
+- "我要减脂" → {"health_goal": "减脂"}
+- "想增肌" → {"health_goal": "增肌"}
+- "维持现状就行" → {"health_goal": "维持"}
+- "想胖一点" → {"health_goal": "增重"}
+- "随便" → {"health_goal": null}
 
 只输出 JSON，不能有任何额外文字。
 """

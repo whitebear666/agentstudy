@@ -50,3 +50,23 @@ class DayPlan:
     breakfast: MealSet
     lunch: MealSet
     dinner: MealSet
+
+@dataclass
+class UserPrefs:
+    people: int = 2
+    days: int = 3
+    budget: Optional[float] = None
+    avoid: Optional[List[str]] = None
+
+    # 全局口味偏好（未指定餐次时使用）
+    cuisine: str = "家常"
+
+    has_kitchen: bool = True
+
+    # 餐次级偏好（用户说“早餐/午餐/晚餐……怎样”时写入这里）
+    breakfast_style: Optional[str] = None
+    lunch_style: Optional[str] = None
+    dinner_style: Optional[str] = None
+
+    # 新增：健康目标
+    health_goal: Optional[str] = None  # "减脂", "增肌", "维持", "增重"

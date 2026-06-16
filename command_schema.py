@@ -25,6 +25,7 @@ _ALLOWED_UPDATE_KEYS = {
     "breakfast_style",
     "lunch_style",
     "dinner_style",
+    "health_goal",  # 新增
 }
 
 

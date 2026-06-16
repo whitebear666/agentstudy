@@ -3,6 +3,8 @@ from __future__ import annotations
 from skills.shopping_list_optimizer import ShoppingListOptimizer  #购物清单带价格
 from skills.price_fetcher import PriceFetcher #价格获取器
 from skills.pantry_aware import PantryAwareSkill  #冰箱感知
+from skills.nutrition_calculator import NutritionCalculator  #能量计算
+from skills.budget_enforcer import BudgetEnforcerSkill  #预算控制
 
 import copy
 import json
@@ -44,6 +46,7 @@ def _prefs_to_dict(prefs) -> Dict[str, Any]:
         "breakfast_style": getattr(prefs, "breakfast_style", None),
         "lunch_style": getattr(prefs, "lunch_style", None),
         "dinner_style": getattr(prefs, "dinner_style", None),
+        "health_goal": getattr(prefs, "health_goal", None),  # 新增
     }
 
 
@@ -63,9 +66,10 @@ class AgentController:
         self.write_json = WriteJsonTool()
         self.replace_skill = MealReplaceSkill()
         self.pantry = PantryAwareSkill()
-
+        self.nutrition_calculator = NutritionCalculator()  #能量计算
         self.price_fetcher = PriceFetcher()  #价格获取器
         self.shopping_optimizer = ShoppingListOptimizer(self.price_fetcher) #价格获取器爬虫
+        self.budget_enforcer = BudgetEnforcerSkill()  #预算控制
 
 
         # 撤销栈：保存更新前的状态快照
@@ -182,43 +186,57 @@ class AgentController:
         if qs:
             return "在生成前，我还需要确认一下：\n- " + "\n- ".join(qs)
 
-        # 设置用户价格输入回调（如果提供了 tk_root）
-        '''if tk_root:
-            self.shopping_optimizer.set_user_price_callback(
-                lambda name: create_price_input_dialog(tk_root, name)
-            )'''
-
-        # 生成优化后的购物清单（强制刷新价格可选）
-        '''optimized_shopping = self.shopping_optimizer.optimize(
-            shopping,
-            budget=prefs.budget,
-            force_refresh_price=False  # 设为 True 可强制刷新
-        )'''
-
         prefs = self.state.prefs
-
         prefs_dict = _prefs_to_dict(prefs)
         self.write_json.run("output/prefs.json", prefs_dict)
 
-        # 调用修改后的 run 方法，获取返回的菜单数据
+        # 生成菜单
         plans, shopping = self.agent.run(prefs, save_output=True)
 
-        # 存储当前菜单数据，供后续替换使用
+        # 存储当前菜单数据
         self.current_day_plans = plans
         self.current_shopping = shopping
         self.current_prefs = copy.deepcopy(prefs)
 
-        # 生成优化后的购物清单
-        optimized_shopping = self.shopping_optimizer.optimize(shopping, prefs.budget)
+        # ===== 购物清单生成 =====
+        try:
+            # 生成优化后的购物清单
+            optimized_shopping = self.shopping_optimizer.optimize(shopping, prefs.budget)
 
-        # 保存优化后的购物清单（JSON 格式）
-        self.write_json.run("output/shopping_list_optimized.json", optimized_shopping)
+            # 预算检查
+            if prefs.budget and prefs.budget > 0:
+                price_dict = {}
+                for category in ["蔬菜", "肉蛋奶", "主食", "调料", "水果", "其他"]:
+                    if category in optimized_shopping:
+                        for item in optimized_shopping[category]:
+                            price_dict[item["name"]] = item["estimated_price"]
 
-        # 保存 Markdown 格式的购物清单
-        shopping_md = self.shopping_optimizer.to_markdown(optimized_shopping)
-        self.agent.write_text.run("output/shopping_list.md", shopping_md)
+                total_price = sum(price_dict.values())
+                is_over, over_amount, suggestions = self.budget_enforcer.check_budget(
+                    price_dict, prefs.budget
+                )
 
-        # 生成简短的菜单预览
+                budget_report = self.budget_enforcer.render_budget_report(
+                    total_price, prefs.budget, suggestions, is_over
+                )
+                optimized_shopping["预算报告"] = budget_report
+
+            # 保存购物清单
+            self.write_json.run("output/shopping_list_optimized.json", optimized_shopping)
+            shopping_md = self.shopping_optimizer.to_markdown(optimized_shopping)
+            self.agent.write_text.run("output/shopping_list.md", shopping_md)
+
+        except Exception as e:
+            print(f"生成购物清单失败: {e}")
+            self.write_json.run("output/shopping_list.json", shopping)
+
+        # 营养分析
+        try:
+            nutrition_md = self.nutrition_calculator.render_nutrition_markdown(plans, prefs.health_goal)
+            self.agent.write_text.run("output/nutrition_report.md", nutrition_md)
+        except Exception as e:
+            print(f"生成营养报告失败: {e}")
+
         preview = self.agent.show_current_menu(plans)
 
         return (
@@ -227,7 +245,8 @@ class AgentController:
             "- output/meal_plan.md\n"
             "- output/shopping_list.json（原始清单）\n"
             "- output/shopping_list_optimized.json（分类优化清单）\n"
-            "- output/shopping_list.md（可读版）\n\n"
+            "- output/shopping_list.md（可读版）\n"
+            "- output/nutrition_report.md（营养报告）\n\n"
             f"【当前菜单预览】\n{preview}\n\n"
             "如果你想调整某道菜，可以说：\n"
             "- 「把第2天的晚餐主菜换成清淡的」\n"
