@@ -23,25 +23,65 @@
 ## 项目结构
 
 ```
-agentstudy/
-  main.py              # 离线入口（不依赖大模型）
-  agent.py             # 生成：食谱规划 + 购物清单 + 落盘
-  models.py            # 数据结构
-  tools.py             # 工具：读写 JSON/文本
-
-  chat_ui_qwen.py      # Tkinter 对话 UI（推荐）
-  agent_controller.py  # 对话控制器（多轮状态、追问、生成）
-  conversation.py      # 会话状态（prefs + confirmed_fields）
-  intent.py            # 意图识别（生成/重置/撤销等）
-  prefs_extractor.py   # 偏好抽取（本地规则兜底 + Qwen）
-
-  llm_qwen.py          # Qwen 客户端
-  prompts.py           # 提示词
-
-  data/
-    fridge.json        # 冰箱/现有食材示例
-  output/              # 运行后生成（已在 .gitignore 中忽略）
-  tests/               # 离线测试（pytest）
+├── 应用入口层
+│ ├── chat_ui_qwen.py # Tkinter 对话 UI（推荐）
+│ └── main.py # 离线入口（不依赖大模型）
+│
+├── Agent 核心层
+│ ├── agent.py # 生成：食谱规划 + 购物清单 + 落盘
+│ ├── agent_controller.py # 对话控制器（多轮状态、追问、生成）
+│ ├── conversation.py # 会话状态（prefs + confirmed_fields）
+│ ├── models.py # 数据结构（UserPrefs/Meal/MealSet/DayPlan）
+│ └── tools.py # 工具：读写 JSON/文本
+│
+├── 对话理解层
+│ ├── intent.py # 意图识别（生成/重置/撤销等）
+│ ├── prefs_extractor.py # 偏好抽取（本地规则兜底 + Qwen）
+│ └── prompts.py # 提示词模板
+│
+├── LLM 服务层
+│ └── llm_qwen.py # Qwen 客户端封装
+│
+├── Skill 能力层
+│ ├── meal_composer.py # 菜单组合生成
+│ ├── meal_classifier.py # 菜品分类
+│ ├── meal_replace.py # 动态替换
+│ ├── pantry_aware.py # 冰箱食材感知
+│ ├── nutrition_calculator.py # 营养评估
+│ ├── budget_enforcer.py # 预算硬约束
+│ └── shopping_list_optimizer.py # 购物清单优化
+│
+├── 数据处理脚本
+│ ├── tag_recipes.py # 菜谱标签生成
+│ └── import_howtocook.py # 导入菜谱数据
+│
+├── 数据层
+│ ├── data/
+│ │ ├── recipes_tagged.json # 标签化菜谱库（390+ 菜品）
+│ │ ├── fridge.json # 冰箱库存示例
+│ │ └── kitchen.json # 厨具配置
+│ └── output/ # 运行后生成（.gitignore 忽略）
+│ ├── meal_plan.md
+│ ├── shopping_list.json
+│ ├── shopping_list.md
+│ ├── shopping_list_optimized.json
+│ ├── nutrition_report.md
+│ └── prefs.json
+│
+├── 硬件接口层
+│ └── hardware/
+│ └── hardware_interface.py # ESP8266/NFC 预留接口
+│
+├── 测试层
+│ └── tests/ # 离线测试（pytest）
+│
+├── 配置文件
+│ ├── .env.example # 环境变量示例
+│ ├── requirements.txt # Python 依赖
+│ └── README.md # 项目说明
+│
+└── 旧脚本
+└── chat_ui.py # 备用聊天界面（已废弃）             # 离线测试（pytest）
 ```
 
 ---
@@ -115,6 +155,6 @@ pytest -q
 ---
 
 ## 下一步计划
-- 更丰富的菜谱库、支持替换某天某餐
-- 购物清单按分类导出（蔬菜/肉类/调料/主食）
-- 加入预算约束与营养/热量目标
+- 硬件加入，系统将支持手机视觉方案或NFC
+- 接入HA平台
+- 将价格源扩展
