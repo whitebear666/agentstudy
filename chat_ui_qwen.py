@@ -1,3 +1,15 @@
+"""Qwen 对话 UI 模块。
+
+作用：
+    提供 Tkinter 聊天窗口，是当前推荐的在线入口。用户在这里输入自然
+    语言需求，系统会通过 AgentController 处理并展示回复。
+
+关联模块：
+    agent_controller.py 负责所有业务逻辑。
+    command_parser.py、prefs_extractor.py 会间接调用 Qwen API。
+    llm_qwen.py 负责 Qwen API 客户端和 key 读取。
+"""
+
 # chat_ui_qwen.py
 from __future__ import annotations
 

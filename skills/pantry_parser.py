@@ -1,4 +1,14 @@
 # skills/pantry_parser.py
+"""冰箱输入解析模块。
+
+作用：
+    将用户关于库存的自然语言描述解析为食材名称、数量和单位。
+
+关联模块：
+    skills/pantry_aware.py 使用解析结果更新库存。
+    agent_controller.py 负责触发库存更新流程。
+"""
+
 from __future__ import annotations
 
 import json

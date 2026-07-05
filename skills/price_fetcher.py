@@ -1,4 +1,15 @@
 # skills/price_fetcher.py
+"""食材价格获取模块。
+
+作用：
+    为购物清单中的食材提供价格估算。当前主要使用本地模拟价格和缓存，
+    后续可以接入真实价格 API 或爬虫。
+
+关联模块：
+    skills/shopping_list_optimizer.py 调用本模块批量获取价格。
+    data/price_cache.json 保存价格缓存。
+"""
+
 from __future__ import annotations
 
 import json

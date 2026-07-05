@@ -1,4 +1,14 @@
-'''这个已经弃用，这是在cmd中调试使用的，不需要再使用了，只需修改chat_ui_qwen.py'''
+﻿"""Legacy Tkinter UI module.
+
+Role:
+    Early debug entry point. It is kept for reference, but daily usage should
+    start from chat_ui_qwen.py.
+
+Related modules:
+    agent.py generates plans directly.
+    models.py provides UserPrefs.
+    chat_ui_qwen.py is the recommended UI entry point.
+"""
 from __future__ import annotations
 
 import tkinter as tk
@@ -139,3 +149,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

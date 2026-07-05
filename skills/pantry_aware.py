@@ -1,4 +1,16 @@
 # skills/pantry_aware.py
+"""冰箱/库存感知模块。
+
+作用：
+    管理本地 pantry 数据，支持添加、删除、查看食材，并根据库存辅助
+    菜谱选择。
+
+关联模块：
+    agent_controller.py 调用本模块处理冰箱相关用户命令。
+    data/pantry.json 存储库存数据。
+    skills/pantry_parser.py 可提供更细的文本解析能力。
+"""
+
 from __future__ import annotations
 
 import json

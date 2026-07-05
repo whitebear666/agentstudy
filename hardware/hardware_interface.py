@@ -1,4 +1,16 @@
 # hardware/hardware_interface.py
+"""硬件接口预留模块。
+
+作用：
+    为 ESP8266/NFC 等硬件事件提供串口连接、事件读取和消息发送能力。
+    当前属于预留扩展层，不影响主菜单生成流程。
+
+关联模块：
+    agent_controller.py 未来可以接入本模块，把扫码/硬件事件转成库存或
+    用户输入。
+    skills/pantry_aware.py 可消费硬件识别到的食材信息。
+"""
+
 from __future__ import annotations
 
 import json

@@ -1,3 +1,14 @@
+"""离线命令行入口。
+
+作用：
+    不依赖大模型，直接根据命令行参数运行本地菜单生成逻辑。适合
+    smoke test、离线演示和排查基础生成链路。
+
+关联模块：
+    models.py 提供 UserPrefs。
+    agent.py 负责生成菜单和购物清单。
+"""
+
 from __future__ import annotations
 
 import argparse

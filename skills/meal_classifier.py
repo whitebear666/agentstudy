@@ -1,4 +1,15 @@
 # skills/meal_classifier.py
+"""菜品分类模块。
+
+作用：
+    根据菜名、食材和标签判断一道菜是否更像汤、主食、蛋白质主菜或
+    配菜。
+
+关联模块：
+    skills/meal_composer.py 使用分类结果组合一餐。
+    skills/meal_replace.py 使用标签和分类辅助换菜。
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

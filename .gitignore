@@ -11,3 +11,7 @@ env/
 
 # outputs (运行产物)
 output/
+
+# frontend
+frontend/node_modules/
+frontend/dist/

@@ -1,10 +1,29 @@
+"""菜谱打标脚本。
+
+作用：
+    为 data/recipes.json 中的菜谱生成基础标签，包括餐次、风格、辣度、
+    做法和是否为汤。
+
+关联模块：
+    scripts/import_howtocook.py 负责生成原始 recipes.json。
+    agent.py 优先读取 data/recipes_tagged.json。
+    skills/meal_composer.py 和 skills/meal_replace.py 使用这些标签。
+"""
+
 from __future__ import annotations
 
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from skills.recipe_quality import clean_recipe_object, infer_quality_tags
 
 
 def load_json(path: Path) -> Any:
@@ -16,7 +35,7 @@ def save_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def infer_tags(name: str) -> Dict[str, Any]:
+def infer_tags(name: str, ingredients: Dict[str, str] | None = None, steps: List[str] | None = None) -> Dict[str, Any]:
     """
     规则打标签（MVP 够用，后续可以扩充规则或改成模型打标）
     """
@@ -95,7 +114,7 @@ def infer_tags(name: str) -> Dict[str, Any]:
     tags["meal_type"] = sorted(set(tags["meal_type"]))
     tags["style"] = sorted(set(tags["style"]))
 
-    return tags
+    return infer_quality_tags(name, ingredients or {}, steps or [], tags)
 
 
 def main():
@@ -121,9 +140,15 @@ def main():
         if not isinstance(name, str) or not isinstance(ingredients, dict) or not isinstance(steps, list):
             continue
 
-        t = dict(obj)
-        t["tags"] = infer_tags(name)
-        tagged.append(t)
+        cleaned = clean_recipe_object(obj)
+        if not cleaned:
+            continue
+        cleaned["tags"] = infer_tags(
+            cleaned["name"],
+            cleaned["ingredients"],
+            cleaned["steps"],
+        )
+        tagged.append(cleaned)
 
     save_json(out_path, tagged)
     print(f"[OK] tagged={len(tagged)} out={out_path}")

@@ -1,3 +1,13 @@
+"""文件读写工具模块。
+
+作用：
+    提供最小化的 JSON/文本读写封装，统一输出目录创建和 UTF-8 编码。
+
+关联模块：
+    agent.py 使用它读取菜谱、写菜单和购物清单。
+    agent_controller.py 使用它写偏好和生成结果。
+"""
+
 # tools.py
 import json
 from pathlib import Path

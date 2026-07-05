@@ -1,4 +1,16 @@
 # skills/nutrition_calculator.py
+"""营养估算模块。
+
+作用：
+    根据食材和本地 nutrition_db 估算热量、蛋白质、碳水和脂肪，并生成
+    营养报告。
+
+关联模块：
+    agent_controller.py 在生成菜单后调用本模块输出 nutrition_report.md。
+    data/nutrition_db.json 提供基础营养数据。
+    models.py 提供 DayPlan/MealSet 结构。
+"""
+
 from __future__ import annotations
 
 import json

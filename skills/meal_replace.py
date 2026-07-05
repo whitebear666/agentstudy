@@ -1,4 +1,16 @@
 # skills/meal_replace.py
+"""换菜模块。
+
+作用：
+    在已生成菜单中按用户要求替换某一餐或某一道菜，尽量保持餐次结构
+    和用户偏好。
+
+关联模块：
+    models.py 提供 DayPlan、MealSet。
+    agent_controller.py 调用本模块处理“换菜/替换”命令。
+    agent.py 提供菜谱库和标签信息。
+"""
+
 from __future__ import annotations
 
 from typing import Dict, List, Optional, Set

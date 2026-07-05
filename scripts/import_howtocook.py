@@ -1,3 +1,14 @@
+"""HowToCook 菜谱导入脚本。
+
+作用：
+    扫描本地 HowToCook 仓库中的 Markdown 菜谱，解析菜名、食材和步骤，
+    合并写入 data/recipes.json。
+
+关联模块：
+    scripts/tag_recipes.py 会继续为导入后的 recipes.json 生成标签。
+    agent.py 最终读取 data/recipes.json 或 data/recipes_tagged.json。
+"""
+
 from __future__ import annotations
 
 import argparse

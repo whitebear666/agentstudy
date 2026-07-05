@@ -1,3 +1,14 @@
+"""结构化命令模型。
+
+作用：
+    定义自然语言命令解析后的标准格式，避免 controller 直接依赖
+    Qwen 原始 JSON。
+
+关联模块：
+    command_parser.py 将模型输出转换为 Command。
+    agent_controller.py 根据 Command 执行业务动作。
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -22,6 +33,9 @@ _ALLOWED_UPDATE_KEYS = {
     "budget",
     "avoid",
     "cuisine",
+    "dish_count",
+    "meat_count",
+    "vegetable_count",
     "breakfast_style",
     "lunch_style",
     "dinner_style",

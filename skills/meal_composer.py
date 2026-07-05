@@ -1,3 +1,15 @@
+"""一餐组合模块。
+
+作用：
+    将候选菜谱组合成结构化的一餐：主菜、配菜、主食、汤。它尽量避免
+    重复菜品，并按分类结果选择合适位置。
+
+关联模块：
+    models.py 提供 Meal、MealSet、UserPrefs。
+    skills/meal_classifier.py 判断菜品类型。
+    agent.py 调用本模块生成早餐、午餐、晚餐。
+"""
+
 # skills/meal_composer.py
 from __future__ import annotations
 
@@ -37,6 +49,8 @@ class MealComposerSkill:
         used_names: Set[str],
         want_soup: bool = True,
         want_staple: bool = True,
+        want_side: bool = True,
+        prefer_protein: bool = True,
     ) -> MealSet:
         # 特征打分：尽量稳定（不随机），利于复现
         mains: List[CandidateMeal] = []
@@ -62,13 +76,15 @@ class MealComposerSkill:
                 sides.append(c)
 
         # 排序策略：更“家常/清淡/川湘”等由外层提前排序；这里按可用性与简单倾向
-        main = self._pick_one(mains, used_names) or self._pick_one(sides, used_names) or (candidates[0] if candidates else None)
+        main_pool = mains if prefer_protein else sides
+        fallback_pool = sides if prefer_protein else mains
+        main = self._pick_one(main_pool, used_names) or self._pick_one(fallback_pool, used_names) or (candidates[0] if candidates else None)
         if main is None:
             raise ValueError("No candidates to compose mealset")
 
         used_names.add(main.meal.name)
 
-        side = self._pick_one(sides, used_names)
+        side = self._pick_one(sides, used_names) if want_side else None
         if side:
             used_names.add(side.meal.name)
 

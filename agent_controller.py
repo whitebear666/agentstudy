@@ -1,3 +1,18 @@
+"""聊天流程控制模块。
+
+作用：
+    作为 UI 和核心 Agent 之间的协调层，处理用户输入、命令解析、
+    偏好更新、冰箱库存、换菜、生成菜单、购物清单优化和预算检查。
+
+关联模块：
+    chat_ui_qwen.py 将用户输入交给本模块。
+    command_parser.py 使用 Qwen 将自然语言解析为结构化命令。
+    intent.py 提供本地规则 fallback。
+    prefs_extractor.py 从自然语言中抽取偏好。
+    agent.py 负责真正的菜单生成。
+    skills/* 提供冰箱、营养、价格、预算、换菜等能力。
+"""
+
 # agent_controller.py
 from __future__ import annotations
 from skills.shopping_list_optimizer import ShoppingListOptimizer  #购物清单带价格
@@ -14,7 +29,7 @@ from typing import Dict, Any, List, Optional
 from agent import GroceryMealAgent
 from conversation import ConversationState
 from intent import detect_intent
-from prefs_extractor import extract_prefs_update_with_qwen, PrefsExtractError
+from prefs_extractor import extract_prefs_update_local, extract_prefs_update_with_qwen, PrefsExtractError
 from tools import WriteJsonTool
 from skills.meal_replace import MealReplaceSkill
 from models import DayPlan, MealSet
@@ -43,6 +58,9 @@ def _prefs_to_dict(prefs) -> Dict[str, Any]:
         "avoid": prefs.avoid or [],
         "cuisine": prefs.cuisine,
         "has_kitchen": prefs.has_kitchen,
+        "dish_count": getattr(prefs, "dish_count", None),
+        "meat_count": getattr(prefs, "meat_count", None),
+        "vegetable_count": getattr(prefs, "vegetable_count", None),
         "breakfast_style": getattr(prefs, "breakfast_style", None),
         "lunch_style": getattr(prefs, "lunch_style", None),
         "dinner_style": getattr(prefs, "dinner_style", None),
@@ -180,6 +198,16 @@ class AgentController:
             return "我记住了。\n" + self._format_next_step_hint()
         except PrefsExtractError:
             return "我记住了。你可以继续补充人数/天数/预算/忌口/口味；确认好后对我说生成。"
+
+    def _merge_local_prefs(self, text: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """把稳定的本地规则结果并入 Qwen 命令解析结果，避免新增偏好字段被模型漏掉。"""
+        merged = dict(updates or {})
+        local = extract_prefs_update_local(text)
+        for key, value in local.items():
+            if value is not None or key == "avoid":
+                if value is not None or local.get("avoid") == []:
+                    merged[key] = value
+        return merged
 
     def generate(self, tk_root=None) -> str:
         qs = _missing_questions(self.state)
@@ -447,6 +475,7 @@ class AgentController:
             # ============================================
 
             # 有 updates 才入撤销栈（避免"完成/生成"也压栈）
+            cmd.updates = self._merge_local_prefs(text, cmd.updates)
             if cmd.updates and any(v is not None for v in cmd.updates.values()) or cmd.updates.get("avoid") == []:
                 self._undo_stack.append(copy.deepcopy(self.state))
                 self.state.update_from_partial(cmd.updates)

@@ -1,3 +1,14 @@
+"""Qwen 提示词模板模块。
+
+作用：
+    集中维护命令解析和偏好抽取的 system prompt，避免提示词散落在业务
+    代码中。
+
+关联模块：
+    command_parser.py 使用命令解析提示词。
+    prefs_extractor.py 使用偏好抽取提示词。
+"""
+
 # prompts.py
 
 PREFS_EXTRACT_SYSTEM = """你是一个信息抽取器。你的任务是从用户的中文描述中抽取做饭/买菜规划参数。

@@ -1,3 +1,15 @@
+"""多轮对话状态模块。
+
+作用：
+    保存当前会话中的用户偏好、已确认字段等状态，支持用户逐步补充
+    人数、天数、预算、忌口和口味。
+
+关联模块：
+    models.py 提供 UserPrefs。
+    prefs_extractor.py 产生偏好更新。
+    agent_controller.py 读取和修改 ConversationState。
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -16,6 +28,9 @@ class ConversationState:
         avoid=None,
         cuisine="家常",
         has_kitchen=True,
+        dish_count=None,
+        meat_count=None,
+        vegetable_count=None,
         breakfast_style=None,
         lunch_style=None,
         dinner_style=None,
@@ -55,6 +70,11 @@ class ConversationState:
         if "cuisine" in partial and partial["cuisine"]:
             self.prefs.cuisine = str(partial["cuisine"]).strip()
             self.confirmed_fields.add("cuisine")
+
+        for field_name in ["dish_count", "meat_count", "vegetable_count"]:
+            if field_name in partial and partial[field_name] is not None:
+                setattr(self.prefs, field_name, int(partial[field_name]))
+                self.confirmed_fields.add(field_name)
 
         # 餐次级偏好（仅用户明确说到才更新）
         if "breakfast_style" in partial and partial["breakfast_style"]:

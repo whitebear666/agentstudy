@@ -1,3 +1,17 @@
+"""用户偏好抽取模块。
+
+作用：
+    从自然语言中抽取人数、天数、预算、忌口、菜系、餐次偏好等字段。
+    优先使用本地规则，必要时调用 Qwen；Qwen 不可用时允许上层回退。
+
+关联模块：
+    llm_qwen.py 提供 Qwen 客户端。
+    prompts.py 提供偏好抽取提示词。
+    models.py 定义 UserPrefs。
+    conversation.py 应用增量偏好。
+    agent_controller.py 调用本模块。
+"""
+
 # prefs_extractor.py
 from __future__ import annotations
 
@@ -49,7 +63,10 @@ def _as_str_list(v: Any) -> List[str]:
 
 
 def extract_prefs_with_qwen(user_text: str, retries: int = 1) -> UserPrefs:
-    client = get_qwen_client()
+    try:
+        client = get_qwen_client()
+    except QwenAPIError as e:
+        raise PrefsExtractError(str(e)) from e
 
     last_err: Exception | None = None
     for _ in range(retries + 1):
@@ -82,6 +99,9 @@ def extract_prefs_with_qwen(user_text: str, retries: int = 1) -> UserPrefs:
                 avoid=avoid if avoid else None,
                 cuisine=cuisine.strip(),
                 has_kitchen=True,
+                dish_count=_clamp_int(data.get("dish_count", 0), default=0, lo=0, hi=6) or None,
+                meat_count=_clamp_int(data.get("meat_count", 0), default=0, lo=0, hi=6) or None,
+                vegetable_count=_clamp_int(data.get("vegetable_count", 0), default=0, lo=0, hi=6) or None,
             )
         except Exception as e:
             last_err = e
@@ -95,12 +115,15 @@ def extract_prefs_update_with_qwen(user_text: str, retries: int = 1) -> Dict[str
       {"people": None, "days": 5, "budget": None, "avoid": None, "cuisine": None}
     """
     local = extract_prefs_update_local(user_text)
-    if any(local.get(k) is not None for k in ["people", "days", "avoid", "cuisine"]) or ("budget" in local):
+    if any(local.get(k) is not None for k in ["people", "days", "avoid", "cuisine", "dish_count", "meat_count", "vegetable_count"]) or ("budget" in local):
         # budget 这里你可以更严格一点：如果 text 里出现“不限/预算xxx”，就直接返回 local
         # 为简单起见：只要 local 抽到任何东西就直接用
         if any(v is not None for v in local.values()) or local.get("avoid") == []:
             return local
-    client = get_qwen_client()
+    try:
+        client = get_qwen_client()
+    except QwenAPIError as e:
+        raise PrefsExtractError(str(e)) from e
 
     last_err: Exception | None = None
 
@@ -110,10 +133,16 @@ def extract_prefs_update_with_qwen(user_text: str, retries: int = 1) -> Dict[str
         budget = data.get("budget", None)
         avoid = data.get("avoid", None)
         cuisine = data.get("cuisine", None)
+        dish_count = data.get("dish_count", None)
+        meat_count = data.get("meat_count", None)
+        vegetable_count = data.get("vegetable_count", None)
 
         # people/days：允许 None，不允许乱值
         people = None if people is None else _clamp_int(people, default=2, lo=1, hi=10)
         days = None if days is None else _clamp_int(days, default=3, lo=1, hi=14)
+        dish_count = None if dish_count is None else _clamp_int(dish_count, default=0, lo=1, hi=6)
+        meat_count = None if meat_count is None else _clamp_int(meat_count, default=0, lo=0, hi=6)
+        vegetable_count = None if vegetable_count is None else _clamp_int(vegetable_count, default=0, lo=0, hi=6)
 
         # budget：允许 None；非 None 转 float
         budget = _as_float_or_none(budget)
@@ -138,6 +167,9 @@ def extract_prefs_update_with_qwen(user_text: str, retries: int = 1) -> Dict[str
             "budget": budget,   # 允许 None 覆盖（表示用户说不限）
             "avoid": avoid,     # None=没提；[]/["香菜"]=明确更新
             "cuisine": cuisine,
+            "dish_count": dish_count,
+            "meat_count": meat_count,
+            "vegetable_count": vegetable_count,
         }
 
     # 先尝试 structured output（如果 DashScope 不支持会抛错，自动回退）
@@ -203,6 +235,9 @@ def extract_prefs_update_local(user_text: str) -> Dict[str, Any]:
         "budget": None,   # 注意：这里 None 表示“没抽到”；如果抽到“不限”我们用键来表示确认（见下）
         "avoid": None,
         "cuisine": None,
+        "dish_count": None,
+        "meat_count": None,
+        "vegetable_count": None,
     }
     hit_any = False
 
@@ -228,10 +263,51 @@ def extract_prefs_update_local(user_text: str) -> Dict[str, Any]:
         partial["budget"] = None
         hit_any = True
     else:
-        m = re.search(r"(预算\s*)?([0-9]+(\.[0-9]+)?)\s*(元|块)?", t)
-        if m and ("预算" in (m.group(1) or "") or "元" in (m.group(4) or "") or "块" in (m.group(4) or "")):
-            partial["budget"] = float(m.group(2))
+        for m in re.finditer(r"(预算\s*)?([0-9]+(\.[0-9]+)?)\s*(元|块)?", t):
+            if "预算" in (m.group(1) or "") or "元" in (m.group(4) or "") or "块" in (m.group(4) or ""):
+                partial["budget"] = float(m.group(2))
+                hit_any = True
+                break
+
+    # dish composition: "3道菜", "一荤两素", "2荤1素", "全素"
+    m = re.search(r"([0-9]+|[零一二两三四五六七八九十])\s*道\s*菜", t)
+    if m:
+        v = _cn_to_int(m.group(1))
+        if v is not None:
+            partial["dish_count"] = v
             hit_any = True
+
+    m = re.search(
+        r"([0-9]+|[零一二两三四五六七八九十])\s*荤\s*([0-9]+|[零一二两三四五六七八九十])\s*素",
+        t,
+    )
+    if m:
+        meat = _cn_to_int(m.group(1))
+        veg = _cn_to_int(m.group(2))
+        if meat is not None and veg is not None:
+            partial["meat_count"] = meat
+            partial["vegetable_count"] = veg
+            partial["dish_count"] = meat + veg
+            hit_any = True
+    else:
+        m = re.search(r"([0-9]+|[零一二两三四五六七八九十])\s*荤", t)
+        if m:
+            v = _cn_to_int(m.group(1))
+            if v is not None:
+                partial["meat_count"] = v
+                hit_any = True
+        m = re.search(r"([0-9]+|[零一二两三四五六七八九十])\s*素", t)
+        if m:
+            v = _cn_to_int(m.group(1))
+            if v is not None:
+                partial["vegetable_count"] = v
+                hit_any = True
+
+    if "全素" in t or "素食" in t or "不要荤" in t or "不吃肉" in t:
+        partial["meat_count"] = 0
+        if partial["vegetable_count"] is None:
+            partial["vegetable_count"] = partial["dish_count"] or 2
+        hit_any = True
 
     # avoid: "不要香菜" / "别放香菜" / "忌口:辣椒" / "无忌口"
     if any(k in t for k in ["无忌口", "不忌口"]):
@@ -268,6 +344,9 @@ def extract_prefs_update_local(user_text: str) -> Dict[str, Any]:
             "budget": None,
             "avoid": None,
             "cuisine": None,
+            "dish_count": None,
+            "meat_count": None,
+            "vegetable_count": None,
         }
 
     # 这里的 partial 仍然需要复用你现有的 clean/clamp（如果有），但已足够兜底

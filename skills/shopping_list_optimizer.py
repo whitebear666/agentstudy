@@ -1,3 +1,15 @@
+"""购物清单优化模块。
+
+作用：
+    将平铺的食材清单按类别整理，补充数量、单位、价格和统计信息，并
+    渲染 Markdown 购物清单。
+
+关联模块：
+    skills/price_fetcher.py 提供价格估算。
+    agent_controller.py 调用本模块生成优化版购物清单。
+    agent.py 生成原始 shopping dict。
+"""
+
 # skills/shopping_list_optimizer.py
 from __future__ import annotations
 
