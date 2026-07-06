@@ -31,11 +31,12 @@ import {
 } from "lucide-react";
 import "./styles.css";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 
 const T = {
   appTitle: "\u4eca\u5929\u5403\u70b9\u5565",
   plan: "\u89c4\u5212",
+  mini: "\u5c0f\u7a0b\u5e8f",
   recipes: "\u83dc\u54c1",
   assistant: "\u52a9\u624b",
   pantry: "\u5e93\u5b58",
@@ -72,6 +73,8 @@ const T = {
   replaceFast: "\u5feb\u624b",
   replaceVeg: "\u7d20\u83dc",
   replaceProtein: "\u9ad8\u86cb\u767d",
+  rerollMeal: "\u91cd\u6392\u8fd9\u9910",
+  rerollDay: "\u91cd\u6392\u8fd9\u5929",
   remove: "\u5220\u9664",
   fixed: "\u5df2\u56fa\u5b9a",
   fix: "\u56fa\u5b9a",
@@ -83,6 +86,8 @@ const T = {
   selected: "\u5df2\u9009\u62e9",
   favorite: "\u6536\u85cf",
   favorited: "\u5df2\u6536\u85cf",
+  favoriteMenu: "\u6536\u85cf\u8fd9\u4efd\u83dc\u5355",
+  favoriteMenus: "\u6536\u85cf\u83dc\u5355",
   blacklist: "\u4e0d\u559c\u6b22",
   blacklisted: "\u5df2\u5c4f\u853d",
   hideBlacklisted: "\u9690\u85cf\u9ed1\u540d\u5355",
@@ -93,6 +98,7 @@ const T = {
   ingredients: "\u98df\u6750",
   steps: "\u505a\u6cd5",
   noRecipes: "\u6682\u65e0\u83dc\u8c31\u6570\u636e",
+  expiringOnly: "\u53ea\u770b\u4e34\u671f\u98df\u6750\u53ef\u505a",
   chatTitle: "\u5bf9\u8bdd\u52a9\u624b",
   thinking: "\u601d\u8003\u4e2d",
   online: "\u5728\u7ebf",
@@ -115,6 +121,20 @@ const T = {
   expiryDate: "\u4fdd\u8d28\u671f",
   expiringSoon: "\u4e34\u671f",
   expired: "\u5df2\u8fc7\u671f",
+  expiringTitle: "\u4e34\u671f\u5e93\u5b58\u63d0\u9192",
+  expiringHint: "\u8fd9\u4e9b\u98df\u6750\u4f1a\u5728\u751f\u6210\u83dc\u5355\u65f6\u81ea\u52a8\u4f18\u5148\u4f7f\u7528\u3002",
+  useExpiring: "\u7528\u8fd9\u4e9b\u98df\u6750\u751f\u6210",
+  daysLeft: "\u5269\u4f59",
+  menuHistory: "\u83dc\u5355\u5386\u53f2",
+  restoreHistory: "\u6062\u590d",
+  viewDetail: "\u8be6\u60c5",
+  noHistory: "\u751f\u6210\u83dc\u5355\u540e\u4f1a\u4fdd\u5b58\u6700\u8fd1\u5386\u53f2\u3002",
+  noFavoriteMenus: "\u6536\u85cf\u559c\u6b22\u7684\u6574\u4efd\u83dc\u5355\u540e\u4f1a\u51fa\u73b0\u5728\u8fd9\u91cc\u3002",
+  detail: "\u8be6\u60c5",
+  close: "\u5173\u95ed",
+  currentMenu: "\u5f53\u524d\u83dc\u5355",
+  quickActions: "\u5feb\u6377\u64cd\u4f5c",
+  dismiss: "\u5173\u95ed",
   preference: "Preferences",
   breakfast: "\u65e9\u9910",
   lunch: "\u5348\u9910",
@@ -267,8 +287,113 @@ function useStoredList(key) {
   return [items, toggle, setItems];
 }
 
+function useStoredJson(key, fallback) {
+  const [value, setValue] = useState(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+
+  return [value, setValue];
+}
+
 function toggleStoredItem(items, setItems, item) {
   setItems((prev) => (prev.includes(item) ? prev.filter((name) => name !== item) : [...prev, item]));
+}
+
+function NoticeBar({ notice, onClose }) {
+  if (!notice) return null;
+  return (
+    <div className={`notice-bar ${notice.type || "info"}`}>
+      <span>{notice.message}</span>
+      <button onClick={onClose}>{T.dismiss}</button>
+    </div>
+  );
+}
+
+function CompactDishList({ menu }) {
+  if (!menu?.length) return <p className="muted">{T.noMenuHint}</p>;
+  const firstDay = menu[0];
+  return (
+    <div className="compact-dish-list">
+      {mealTypes.map(([mealType, mealLabel]) => {
+        const meal = firstDay.meals?.[mealType];
+        const names = Object.values(meal?.parts || {}).filter(Boolean).map((dish) => dish.name);
+        if (!names.length) return null;
+        return (
+          <section key={mealType}>
+            <span>{meal?.title || mealLabel}</span>
+            <strong>{names.slice(0, 3).join(" / ")}</strong>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function MenuDetailModal({ item, onClose, onRestore }) {
+  if (!item) return null;
+  const artifacts = item.artifacts || {};
+  const prefs = artifacts.prefs || {};
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="modal-panel" onClick={(event) => event.stopPropagation()}>
+        <div className="panel-header tight">
+          <div>
+            <p className="eyebrow">{T.detail}</p>
+            <h2><ChefHat size={21} /> {item.title}</h2>
+          </div>
+          <button className="select-action" onClick={onClose}>{T.close}</button>
+        </div>
+        <div className="stats-grid modal-stats">
+          <Stat icon={ChefHat} label={T.people} value={prefs.people || "-"} />
+          <Stat icon={ListChecks} label={T.days} value={prefs.days || "-"} />
+          <Stat icon={ShoppingBag} label={T.budget} value={prefs.budget ? `¥${prefs.budget}` : "-"} />
+          <Stat icon={Utensils} label={T.dishCount} value={prefs.dish_count ? `${prefs.dish_count}\u9053` : "-"} />
+        </div>
+        <CompactDishList menu={artifacts.menu} />
+        <div className="modal-actions">
+          <button className="primary-action" onClick={() => onRestore(item)}>
+            <RefreshCw size={17} />
+            {T.restoreHistory}
+          </button>
+          <button className="select-action" onClick={onClose}>{T.close}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ExpiringPantryAlert({ items, onGenerate, loading }) {
+  if (!items?.length) return null;
+  return (
+    <section className="expiring-alert">
+      <div>
+        <p className="eyebrow">Pantry Alert</p>
+        <h2><Clock3 size={21} /> {T.expiringTitle}</h2>
+        <p>{T.expiringHint}</p>
+      </div>
+      <div className="expiring-items">
+        {items.slice(0, 6).map((item) => (
+          <span className={item.status === "expired" ? "expired" : ""} key={`${item.name}-${item.expiry_date}`}>
+            {item.name}
+            <em>{item.days_left < 0 ? T.expired : `${T.daysLeft} ${item.days_left} \u5929`}</em>
+          </span>
+        ))}
+      </div>
+      <button className="primary-action" disabled={loading} onClick={onGenerate}>
+        <Sparkles size={17} />
+        {loading ? T.generating : T.useExpiring}
+      </button>
+    </section>
+  );
 }
 
 function PlanningForm({ form, setForm, onGenerate, loading, blacklistedCount, favoriteCount }) {
@@ -354,18 +479,24 @@ function dishKey(day, mealType, partType, name) {
   return `${day}:${mealType}:${partType}:${name}`;
 }
 
-function MenuEditor({ menu, onInspect, onReplace, onRemove, fixedDishKeys, onToggleFixed }) {
+function MenuEditor({ menu, onInspect, onReplace, onRemove, onRerollMeal, onRerollDay, fixedDishKeys, onToggleFixed }) {
   if (!menu?.length) return null;
   return (
     <div className="menu-editor">
       {menu.map((day) => (
         <article className="meal-card" key={day.day}>
-          <h3>Day {day.day}</h3>
+          <div className="meal-card-header">
+            <h3>Day {day.day}</h3>
+            <button onClick={() => onRerollDay(day.day)}><RefreshCw size={15} /> {T.rerollDay}</button>
+          </div>
           {mealTypes.map(([mealType, mealLabel]) => {
             const meal = day.meals?.[mealType];
             return (
               <section className="menu-meal-block" key={`${day.day}-${mealType}`}>
-                <h4>{meal?.title || mealLabel}</h4>
+                <div className="meal-block-header">
+                  <h4>{meal?.title || mealLabel}</h4>
+                  <button onClick={() => onRerollMeal(day.day, mealType)}><RefreshCw size={15} /> {T.rerollMeal}</button>
+                </div>
                 <div className="menu-dish-grid">
                   {partTypes.map(([partType, partLabel]) => {
                     const dish = meal?.parts?.[partType];
@@ -437,7 +568,7 @@ function renderPlanLine(line, index) {
   return null;
 }
 
-function MealPlanView({ artifacts, onInspect, onReplace, onRemove, fixedDishKeys, onToggleFixed }) {
+function MealPlanView({ artifacts, onInspect, onReplace, onRemove, onRerollMeal, onRerollDay, fixedDishKeys, onToggleFixed }) {
   const sections = useMemo(() => splitPlan(artifacts.mealPlanMarkdown), [artifacts.mealPlanMarkdown]);
   const hasMenu = artifacts.menu?.length;
   return (
@@ -456,6 +587,8 @@ function MealPlanView({ artifacts, onInspect, onReplace, onRemove, fixedDishKeys
             onInspect={onInspect}
             onReplace={onReplace}
             onRemove={onRemove}
+            onRerollMeal={onRerollMeal}
+            onRerollDay={onRerollDay}
             fixedDishKeys={fixedDishKeys}
             onToggleFixed={onToggleFixed}
           />
@@ -482,6 +615,7 @@ function RecipeBrowser({
   selectedNames,
   setSelectedNames,
   shopping,
+  expiringPantry,
   activeRecipeName,
   setActiveRecipeName,
   favoriteRecipes,
@@ -494,14 +628,17 @@ function RecipeBrowser({
   const [query, setQuery] = useState("");
   const [selectedOnly, setSelectedOnly] = useState(false);
   const [hideBlacklisted, setHideBlacklisted] = useState(true);
+  const [expiringOnly, setExpiringOnly] = useState(false);
+  const expiringNames = useMemo(() => (expiringPantry || []).map((item) => item.name).filter(Boolean), [expiringPantry]);
   const filtered = useMemo(() => {
     const q = query.trim();
     return recipes
       .filter((recipe) => !hideBlacklisted || !blacklistedRecipes.includes(recipe.name))
       .filter((recipe) => !selectedOnly || selectedNames.includes(recipe.name))
+      .filter((recipe) => !expiringOnly || Object.keys(recipe.ingredients || {}).some((name) => expiringNames.some((stock) => stock === name || stock.includes(name) || name.includes(stock))))
       .filter((recipe) => !q || recipe.name.includes(q))
       .slice(0, 80);
-  }, [recipes, query, selectedNames, selectedOnly, hideBlacklisted, blacklistedRecipes]);
+  }, [recipes, query, selectedNames, selectedOnly, hideBlacklisted, blacklistedRecipes, expiringOnly, expiringNames]);
   const active = recipes.find((recipe) => recipe.name === activeRecipeName) || filtered[0];
   const isFavorite = active ? favoriteRecipes.includes(active.name) : false;
   const isBlacklisted = active ? blacklistedRecipes.includes(active.name) : false;
@@ -527,6 +664,11 @@ function RecipeBrowser({
           <button className={hideBlacklisted ? "tool-chip active" : "tool-chip"} onClick={() => setHideBlacklisted((value) => !value)}>
             {T.hideBlacklisted}
           </button>
+          {expiringNames.length ? (
+            <button className={expiringOnly ? "tool-chip active" : "tool-chip"} onClick={() => setExpiringOnly((value) => !value)}>
+              {T.expiringOnly}
+            </button>
+          ) : null}
           <button className="tool-chip" onClick={() => setSelectedNames([])}>
             {T.clearSelected}
           </button>
@@ -778,7 +920,59 @@ function ShoppingList({ shopping, checkedItems, setCheckedItems }) {
   );
 }
 
-function SidePanel({ artifacts, checkedItems, setCheckedItems }) {
+function MenuHistory({ history, onRestore, onInspect }) {
+  return (
+    <section className="panel compact">
+      <div className="panel-header tight">
+        <div>
+          <p className="eyebrow">History</p>
+          <h2><Clock3 size={21} /> {T.menuHistory}</h2>
+        </div>
+      </div>
+      {history.length ? (
+        <div className="history-list">
+          {history.slice(0, 6).map((item) => (
+            <button key={item.id} onClick={() => onInspect(item)}>
+              <span>{item.title}</span>
+              <em>{item.createdAt}</em>
+              <strong>{T.viewDetail}</strong>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">{T.noHistory}</p>
+      )}
+    </section>
+  );
+}
+
+function FavoriteMenuList({ favorites, onRestore, onInspect }) {
+  return (
+    <section className="panel compact">
+      <div className="panel-header tight">
+        <div>
+          <p className="eyebrow">Saved</p>
+          <h2><Heart size={21} /> {T.favoriteMenus}</h2>
+        </div>
+      </div>
+      {favorites.length ? (
+        <div className="history-list">
+          {favorites.slice(0, 6).map((item) => (
+            <button key={item.id} onClick={() => onInspect(item)}>
+              <span>{item.title}</span>
+              <em>{item.createdAt}</em>
+              <strong>{T.viewDetail}</strong>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">{T.noFavoriteMenus}</p>
+      )}
+    </section>
+  );
+}
+
+function SidePanel({ artifacts, checkedItems, setCheckedItems, menuHistory, favoriteMenus, onRestoreHistory, onInspectHistory, onFavoriteMenu }) {
   const prefs = artifacts.prefs || {};
   return (
     <aside className="side-stack">
@@ -787,6 +981,7 @@ function SidePanel({ artifacts, checkedItems, setCheckedItems }) {
         <div className="export-actions">
           <button onClick={() => downloadText("meal_plan.md", artifacts.mealPlanMarkdown || "")}><Download size={15} /> {T.exportMenu}</button>
           <button onClick={() => downloadText("shopping_list.json", JSON.stringify(artifacts.shoppingList || {}, null, 2), "application/json;charset=utf-8")}><Download size={15} /> {T.exportShopping}</button>
+          <button onClick={onFavoriteMenu}><Heart size={15} /> {T.favoriteMenu}</button>
         </div>
         <div className="stats-grid">
           <Stat icon={ChefHat} label={T.people} value={prefs.people || "-"} />
@@ -807,7 +1002,96 @@ function SidePanel({ artifacts, checkedItems, setCheckedItems }) {
         </div>
         <ShoppingList shopping={artifacts.shoppingList} checkedItems={checkedItems} setCheckedItems={setCheckedItems} />
       </section>
+
+      <MenuHistory history={menuHistory} onRestore={onRestoreHistory} onInspect={onInspectHistory} />
+      <FavoriteMenuList favorites={favoriteMenus} onRestore={onRestoreHistory} onInspect={onInspectHistory} />
     </aside>
+  );
+}
+
+function MiniProgramView({
+  artifacts,
+  loading,
+  onGenerate,
+  onFavoriteMenu,
+  menuHistory,
+  favoriteMenus,
+  onInspectHistory,
+  onRestoreHistory,
+  checkedItems,
+  setCheckedItems,
+  setActiveView,
+}) {
+  const prefs = artifacts.prefs || {};
+  return (
+    <section className="mini-shell">
+      <div className="mini-hero">
+        <p className="eyebrow">Mini App</p>
+        <h2>{T.appTitle}</h2>
+        <p>{prefs.people ? `${prefs.people}\u4eba · ${prefs.days || 1}\u5929 · ${prefs.cuisine || T.home}` : T.noMenuHint}</p>
+        <div className="mini-actions">
+          <button className="primary-action" onClick={onGenerate} disabled={loading}>
+            <Sparkles size={17} />
+            {loading ? T.generating : T.generate}
+          </button>
+          <button className="select-action" onClick={onFavoriteMenu}>
+            <Heart size={16} />
+            {T.favoriteMenu}
+          </button>
+        </div>
+      </div>
+
+      <div className="mini-grid">
+        <section className="mini-card">
+          <div className="mini-card-head">
+            <span>{T.currentMenu}</span>
+            <button onClick={() => setActiveView("plan")}>{T.view}</button>
+          </div>
+          <CompactDishList menu={artifacts.menu} />
+        </section>
+
+        <section className="mini-card">
+          <div className="mini-card-head">
+            <span>{T.expiringTitle}</span>
+            <button onClick={() => setActiveView("pantry")}>{T.view}</button>
+          </div>
+          <div className="expiring-items mini-expiring">
+            {(artifacts.expiringPantry || []).slice(0, 5).map((item) => (
+              <span className={item.status === "expired" ? "expired" : ""} key={`${item.name}-${item.expiry_date}`}>
+                {item.name}
+                <em>{item.days_left < 0 ? T.expired : `${item.days_left}\u5929`}</em>
+              </span>
+            ))}
+            {!(artifacts.expiringPantry || []).length ? <p className="muted">{T.pantryHint}</p> : null}
+          </div>
+        </section>
+
+        <section className="mini-card">
+          <div className="mini-card-head">
+            <span>{T.allShopping}</span>
+            <button onClick={() => setActiveView("plan")}>{T.view}</button>
+          </div>
+          <ShoppingList shopping={artifacts.shoppingList} checkedItems={checkedItems} setCheckedItems={setCheckedItems} />
+        </section>
+
+        <section className="mini-card">
+          <div className="mini-card-head">
+            <span>{T.menuHistory}</span>
+            <button onClick={() => setActiveView("plan")}>{T.view}</button>
+          </div>
+          <div className="history-list mini-history">
+            {[...favoriteMenus.slice(0, 2), ...menuHistory.slice(0, 3)].map((item) => (
+              <button key={`mini-${item.id}`} onClick={() => onInspectHistory(item)}>
+                <span>{item.title}</span>
+                <em>{item.createdAt}</em>
+                <strong>{T.viewDetail}</strong>
+              </button>
+            ))}
+            {!favoriteMenus.length && !menuHistory.length ? <p className="muted">{T.noHistory}</p> : null}
+          </div>
+        </section>
+      </div>
+    </section>
   );
 }
 
@@ -823,6 +1107,10 @@ function App() {
   const [activeRecipeName, setActiveRecipeName] = useState("");
   const [pantryItems, setPantryItems] = useState([]);
   const [pantryForm, setPantryForm] = useState({ name: "", quantity: 1, unit: "\u4efd", category: "\u5176\u4ed6", expiry_date: "" });
+  const [notice, setNotice] = useState(null);
+  const [detailItem, setDetailItem] = useState(null);
+  const [menuHistory, setMenuHistory] = useStoredJson("mealPlanner.menuHistory", []);
+  const [favoriteMenus, setFavoriteMenus] = useStoredJson("mealPlanner.favoriteMenus", []);
   const [checkedShoppingItems, setCheckedShoppingItems] = useStoredList("mealPlanner.checkedShoppingItems");
   const [fixedDishKeys, toggleFixedDish, setFixedDishKeys] = useStoredList("mealPlanner.fixedDishKeys");
   const [favoriteRecipes, toggleFavoriteRecipe] = useStoredList("mealPlanner.favoriteRecipes");
@@ -842,7 +1130,7 @@ function App() {
         setRecipes(data.recipes || []);
         setPantryItems(data.artifacts?.pantry || []);
       })
-      .catch(() => {});
+      .catch(() => setNotice({ type: "error", message: "\u540e\u7aef\u672a\u8fde\u63a5\uff0c\u8bf7\u5148\u542f\u52a8 FastAPI \u670d\u52a1\u3002" }));
   }, []);
 
   useEffect(() => {
@@ -857,8 +1145,61 @@ function App() {
     })
       .then((res) => res.json())
       .then((data) => setSelectedShopping(data.items || {}))
-      .catch(() => {});
+      .catch(() => setNotice({ type: "error", message: "\u83dc\u54c1\u8d2d\u7269\u6e05\u5355\u83b7\u53d6\u5931\u8d25\u3002" }));
   }, [selectedNames]);
+
+  async function readJsonResponse(res) {
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  function makeMenuRecord(nextArtifacts, idPrefix = "history") {
+    if (!nextArtifacts?.menu?.length) return;
+    const prefs = nextArtifacts.prefs || {};
+    const title = `${prefs.days || 1}\u5929\u83dc\u5355 · ${prefs.people || "-"}\u4eba · ${new Date().toLocaleString()}`;
+    return {
+      id: `${idPrefix}-${Date.now()}`,
+      title,
+      createdAt: new Date().toLocaleString(),
+      artifacts: {
+        mealPlanMarkdown: nextArtifacts.mealPlanMarkdown,
+        shoppingList: nextArtifacts.shoppingList,
+        optimizedShoppingList: nextArtifacts.optimizedShoppingList,
+        nutritionReportMarkdown: nextArtifacts.nutritionReportMarkdown,
+        prefs: nextArtifacts.prefs,
+        menu: nextArtifacts.menu,
+        pantry: nextArtifacts.pantry,
+        expiringPantry: nextArtifacts.expiringPantry,
+      },
+    };
+  }
+
+  function saveMenuHistory(nextArtifacts) {
+    const record = makeMenuRecord(nextArtifacts);
+    if (!record) return;
+    setMenuHistory((prev) => [record, ...prev.filter((item) => item.id !== record.id)].slice(0, 8));
+  }
+
+  function restoreMenuHistory(item) {
+    setArtifacts(item.artifacts || {});
+    setPantryItems(item.artifacts?.pantry || pantryItems);
+    setCheckedShoppingItems([]);
+    setActiveView("plan");
+    setDetailItem(null);
+    setNotice({ type: "success", message: "\u5df2\u6062\u590d\u5386\u53f2\u83dc\u5355\u3002" });
+  }
+
+  function favoriteCurrentMenu() {
+    const record = makeMenuRecord(artifacts, "favorite");
+    if (!record) {
+      setNotice({ type: "error", message: "\u8fd8\u6ca1\u6709\u53ef\u6536\u85cf\u7684\u83dc\u5355\u3002" });
+      return;
+    }
+    setFavoriteMenus((prev) => [record, ...prev].slice(0, 12));
+    setNotice({ type: "success", message: "\u5df2\u6536\u85cf\u8fd9\u4efd\u83dc\u5355\u3002" });
+  }
 
   async function onGenerate() {
     setLoading(true);
@@ -880,13 +1221,17 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       setArtifacts(data.artifacts || {});
       setRecipes(data.recipes || recipes);
       setPantryItems(data.artifacts?.pantry || pantryItems);
+      saveMenuHistory(data.artifacts || {});
       setCheckedShoppingItems([]);
       setFixedDishKeys([]);
+      setNotice({ type: "success", message: "\u83dc\u5355\u5df2\u751f\u6210\u5e76\u4fdd\u5b58\u5230\u5386\u53f2\u3002" });
       setMessages((prev) => [...prev, { role: "agent", content: "\u8868\u5355\u83dc\u5355\u5df2\u7ecf\u751f\u6210\uff0c\u53ef\u4ee5\u76f4\u63a5\u67e5\u770b\u3001\u6362\u83dc\u6216\u8fdb\u5165\u83dc\u54c1\u9875\u770b\u505a\u6cd5\u3002" }]);
+    } catch (error) {
+      setNotice({ type: "error", message: `\u751f\u6210\u83dc\u5355\u5931\u8d25\uff1a${error.message}` });
     } finally {
       setLoading(false);
     }
@@ -900,11 +1245,13 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ day, meal_type: mealType, part_type: partType, constraint }),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       setArtifacts(data.artifacts || {});
       setRecipes(data.recipes || recipes);
       setPantryItems(data.artifacts?.pantry || pantryItems);
       setMessages((prev) => [...prev, { role: "agent", content: data.reply || "\u5df2\u6362\u83dc\u5e76\u66f4\u65b0\u8d2d\u7269\u6e05\u5355\u3002" }]);
+    } catch (error) {
+      setNotice({ type: "error", message: `\u6362\u83dc\u5931\u8d25\uff1a${error.message}` });
     } finally {
       setLoading(false);
     }
@@ -918,11 +1265,53 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ day, meal_type: mealType, part_type: partType }),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       setArtifacts(data.artifacts || {});
       setRecipes(data.recipes || recipes);
       setPantryItems(data.artifacts?.pantry || pantryItems);
       setMessages((prev) => [...prev, { role: "agent", content: data.reply || "\u5df2\u5220\u9664\u5e76\u66f4\u65b0\u8d2d\u7269\u6e05\u5355\u3002" }]);
+    } catch (error) {
+      setNotice({ type: "error", message: `\u5220\u9664\u83dc\u54c1\u5931\u8d25\uff1a${error.message}` });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onRerollMeal(day, mealType) {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/menu/reroll-meal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ day, meal_type: mealType, fixed_keys: fixedDishKeys }),
+      });
+      const data = await readJsonResponse(res);
+      setArtifacts(data.artifacts || {});
+      setRecipes(data.recipes || recipes);
+      setPantryItems(data.artifacts?.pantry || pantryItems);
+      setMessages((prev) => [...prev, { role: "agent", content: data.reply || "\u5df2\u91cd\u6392\u8fd9\u9910\u3002" }]);
+    } catch (error) {
+      setNotice({ type: "error", message: `\u91cd\u6392\u8fd9\u9910\u5931\u8d25\uff1a${error.message}` });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onRerollDay(day) {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/menu/reroll-day`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ day, fixed_keys: fixedDishKeys }),
+      });
+      const data = await readJsonResponse(res);
+      setArtifacts(data.artifacts || {});
+      setRecipes(data.recipes || recipes);
+      setPantryItems(data.artifacts?.pantry || pantryItems);
+      setMessages((prev) => [...prev, { role: "agent", content: data.reply || "\u5df2\u91cd\u6392\u8fd9\u5929\u3002" }]);
+    } catch (error) {
+      setNotice({ type: "error", message: `\u91cd\u6392\u8fd9\u5929\u5931\u8d25\uff1a${error.message}` });
     } finally {
       setLoading(false);
     }
@@ -931,30 +1320,40 @@ function App() {
   async function onAddPantry() {
     const name = pantryForm.name.trim();
     if (!name) return;
-    const res = await fetch(`${API_BASE}/api/pantry`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...pantryForm,
-        name,
-        quantity: Number(pantryForm.quantity) || 1,
-      }),
-    });
-    const data = await res.json();
-    setPantryItems(data.items || []);
-    setArtifacts(data.artifacts || artifacts);
-    setPantryForm((prev) => ({ ...prev, name: "", quantity: 1, expiry_date: "" }));
+    try {
+      const res = await fetch(`${API_BASE}/api/pantry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...pantryForm,
+          name,
+          quantity: Number(pantryForm.quantity) || 1,
+        }),
+      });
+      const data = await readJsonResponse(res);
+      setPantryItems(data.items || []);
+      setArtifacts(data.artifacts || artifacts);
+      setPantryForm((prev) => ({ ...prev, name: "", quantity: 1, expiry_date: "" }));
+      setNotice({ type: "success", message: "\u5e93\u5b58\u5df2\u66f4\u65b0\u3002" });
+    } catch (error) {
+      setNotice({ type: "error", message: `\u6dfb\u52a0\u5e93\u5b58\u5931\u8d25\uff1a${error.message}` });
+    }
   }
 
   async function onDeletePantry(name) {
-    const res = await fetch(`${API_BASE}/api/pantry/delete`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    const data = await res.json();
-    setPantryItems(data.items || []);
-    setArtifacts(data.artifacts || artifacts);
+    try {
+      const res = await fetch(`${API_BASE}/api/pantry/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await readJsonResponse(res);
+      setPantryItems(data.items || []);
+      setArtifacts(data.artifacts || artifacts);
+      setNotice({ type: "success", message: "\u5df2\u5220\u9664\u5e93\u5b58\u98df\u6750\u3002" });
+    } catch (error) {
+      setNotice({ type: "error", message: `\u5220\u9664\u5e93\u5b58\u5931\u8d25\uff1a${error.message}` });
+    }
   }
 
   function inspectRecipe(name) {
@@ -974,11 +1373,16 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       setMessages((prev) => [...prev, { role: "agent", content: data.reply || "\u5df2\u5904\u7406\u3002" }]);
       setArtifacts(data.artifacts || {});
-    } catch {
-      setMessages((prev) => [...prev, { role: "agent", content: "\u540e\u7aef\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u786e\u8ba4 FastAPI \u670d\u52a1\u5df2\u7ecf\u542f\u52a8\u3002" }]);
+      if (data.artifacts?.menu?.length) {
+        saveMenuHistory(data.artifacts);
+      }
+    } catch (error) {
+      const message = `\u540e\u7aef\u8bf7\u6c42\u5931\u8d25\uff1a${error.message}`;
+      setNotice({ type: "error", message });
+      setMessages((prev) => [...prev, { role: "agent", content: message }]);
     } finally {
       setLoading(false);
     }
@@ -997,15 +1401,35 @@ function App() {
         </div>
       </header>
 
+      <NoticeBar notice={notice} onClose={() => setNotice(null)} />
+
       <nav className="view-tabs">
+        <button className={activeView === "mini" ? "active" : ""} onClick={() => setActiveView("mini")}><Sparkles size={17} /> {T.mini}</button>
         <button className={activeView === "plan" ? "active" : ""} onClick={() => setActiveView("plan")}><ListChecks size={17} /> {T.plan}</button>
         <button className={activeView === "recipes" ? "active" : ""} onClick={() => setActiveView("recipes")}><BookOpen size={17} /> {T.recipes}</button>
         <button className={activeView === "pantry" ? "active" : ""} onClick={() => setActiveView("pantry")}><PackagePlus size={17} /> {T.pantry}</button>
         <button className={activeView === "chat" ? "active" : ""} onClick={() => setActiveView("chat")}><MessageCircle size={17} /> {T.assistant}</button>
       </nav>
 
+      {activeView === "mini" && (
+        <MiniProgramView
+          artifacts={artifacts}
+          loading={loading}
+          onGenerate={onGenerate}
+          onFavoriteMenu={favoriteCurrentMenu}
+          menuHistory={menuHistory}
+          favoriteMenus={favoriteMenus}
+          onInspectHistory={setDetailItem}
+          onRestoreHistory={restoreMenuHistory}
+          checkedItems={checkedShoppingItems}
+          setCheckedItems={setCheckedShoppingItems}
+          setActiveView={setActiveView}
+        />
+      )}
+
       {activeView === "plan" && (
         <div className="planning-page">
+          <ExpiringPantryAlert items={artifacts.expiringPantry} onGenerate={onGenerate} loading={loading} />
           <PlanningForm
             form={form}
             setForm={setForm}
@@ -1020,10 +1444,21 @@ function App() {
               onInspect={inspectRecipe}
               onReplace={onReplace}
               onRemove={onRemove}
+              onRerollMeal={onRerollMeal}
+              onRerollDay={onRerollDay}
               fixedDishKeys={fixedDishKeys}
               onToggleFixed={toggleFixedDish}
             />
-            <SidePanel artifacts={artifacts} checkedItems={checkedShoppingItems} setCheckedItems={setCheckedShoppingItems} />
+            <SidePanel
+              artifacts={artifacts}
+              checkedItems={checkedShoppingItems}
+              setCheckedItems={setCheckedShoppingItems}
+              menuHistory={menuHistory}
+              favoriteMenus={favoriteMenus}
+              onRestoreHistory={restoreMenuHistory}
+              onInspectHistory={setDetailItem}
+              onFavoriteMenu={favoriteCurrentMenu}
+            />
           </div>
         </div>
       )}
@@ -1034,6 +1469,7 @@ function App() {
           selectedNames={selectedNames}
           setSelectedNames={setSelectedNames}
           shopping={selectedShopping}
+          expiringPantry={artifacts.expiringPantry}
           activeRecipeName={activeRecipeName}
           setActiveRecipeName={setActiveRecipeName}
           favoriteRecipes={favoriteRecipes}
@@ -1058,6 +1494,8 @@ function App() {
       {activeView === "chat" && (
         <ChatPanel messages={messages} input={input} setInput={setInput} onSend={onSend} loading={loading} />
       )}
+
+      <MenuDetailModal item={detailItem} onClose={() => setDetailItem(null)} onRestore={restoreMenuHistory} />
     </main>
   );
 }

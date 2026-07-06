@@ -89,6 +89,56 @@ def test_replace_endpoint_updates_structured_menu(tmp_path, monkeypatch):
     assert "meal_plan.md" in response["reply"] or "output/meal_plan.md" in response["reply"]
 
 
+def test_reroll_meal_endpoint_keeps_fixed_dishes(tmp_path, monkeypatch):
+    _isolate_outputs(tmp_path, monkeypatch)
+
+    generated = api_server.generate(
+        api_server.GenerateRequest(
+            people=2,
+            days=1,
+            budget=120,
+            cuisine="家常",
+            avoid=[],
+            dish_count=3,
+            meat_count=1,
+            vegetable_count=2,
+        )
+    )
+    dinner = generated["artifacts"]["menu"][0]["meals"]["dinner"]
+    fixed_dish = dinner["parts"]["main"]
+    fixed_key = f"1:dinner:main:{fixed_dish['name']}"
+
+    response = api_server.reroll_menu_meal(
+        api_server.RerollMealRequest(day=1, meal_type="dinner", fixed_keys=[fixed_key])
+    )
+
+    updated = response["artifacts"]["menu"][0]["meals"]["dinner"]
+    assert updated["parts"]["main"]["name"] == fixed_dish["name"]
+    assert response["artifacts"]["shoppingList"] is not None
+
+
+def test_reroll_day_endpoint_updates_menu(tmp_path, monkeypatch):
+    _isolate_outputs(tmp_path, monkeypatch)
+
+    api_server.generate(
+        api_server.GenerateRequest(
+            people=2,
+            days=1,
+            budget=120,
+            cuisine="家常",
+            avoid=[],
+            dish_count=3,
+            meat_count=1,
+            vegetable_count=2,
+        )
+    )
+    response = api_server.reroll_menu_day(api_server.RerollDayRequest(day=1, fixed_keys=[]))
+
+    assert response["artifacts"]["menu"]
+    assert response["artifacts"]["shoppingList"] is not None
+    assert "重排" in response["reply"]
+
+
 def test_remove_endpoint_updates_menu_and_shopping(tmp_path, monkeypatch):
     _isolate_outputs(tmp_path, monkeypatch)
 
@@ -197,6 +247,28 @@ def test_pantry_endpoint_adds_and_deletes_items(tmp_path, monkeypatch):
 
     deleted = api_server.pantry_delete(api_server.PantryDeleteRequest(name="鸡蛋"))
     assert all(item["name"] != "鸡蛋" for item in deleted["items"])
+
+
+def test_artifacts_include_expiring_pantry_items(tmp_path, monkeypatch):
+    _isolate_outputs(tmp_path, monkeypatch)
+
+    today = api_server.date.today()
+    expiry_date = today.isoformat()
+    api_server.pantry_add(
+        api_server.PantryItemRequest(
+            name="豆腐",
+            quantity=1,
+            unit="盒",
+            category="肉蛋奶",
+            expiry_date=expiry_date,
+        )
+    )
+
+    artifacts = api_server._artifacts()
+    assert artifacts["expiringPantry"]
+    assert artifacts["expiringPantry"][0]["name"] == "豆腐"
+    assert artifacts["expiringPantry"][0]["days_left"] == 0
+    assert artifacts["expiringPantry"][0]["status"] == "soon"
 
 
 def test_generate_deducts_pantry_items_from_shopping_list(tmp_path, monkeypatch):

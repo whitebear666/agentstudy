@@ -13,6 +13,7 @@ Related modules:
 from __future__ import annotations
 
 import json
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -78,6 +79,17 @@ class RemoveMealRequest(BaseModel):
     part_type: str = "main"
 
 
+class RerollMealRequest(BaseModel):
+    day: int = 1
+    meal_type: str = "dinner"
+    fixed_keys: List[str] = []
+
+
+class RerollDayRequest(BaseModel):
+    day: int = 1
+    fixed_keys: List[str] = []
+
+
 class PantryItemRequest(BaseModel):
     name: str
     quantity: float = 1
@@ -128,6 +140,27 @@ def _pantry_items() -> List[Dict[str, Any]]:
     return items
 
 
+def _expiring_pantry_items(days: int = 3) -> List[Dict[str, Any]]:
+    expiring: List[Dict[str, Any]] = []
+    today = date.today()
+    for item in _pantry_items():
+        expiry_date = item.get("expiry_date")
+        if not expiry_date:
+            continue
+        try:
+            expiry = datetime.fromisoformat(str(expiry_date)).date()
+        except ValueError:
+            continue
+        days_left = (expiry - today).days
+        if days_left <= days:
+            enriched = dict(item)
+            enriched["days_left"] = days_left
+            enriched["status"] = "expired" if days_left < 0 else "soon"
+            expiring.append(enriched)
+    expiring.sort(key=lambda item: item["days_left"])
+    return expiring
+
+
 def _artifacts() -> Dict[str, Any]:
     return {
         "mealPlanMarkdown": _read_text(OUTPUT_DIR / "meal_plan.md"),
@@ -137,6 +170,7 @@ def _artifacts() -> Dict[str, Any]:
         "prefs": _read_json(OUTPUT_DIR / "prefs.json"),
         "menu": _menu_payload(),
         "pantry": _pantry_items(),
+        "expiringPantry": _expiring_pantry_items(),
     }
 
 
@@ -279,6 +313,29 @@ def _persist_current_menu() -> None:
     controller.agent.write_json.run("output/shopping_list.json", controller.current_shopping)
 
 
+def _is_fixed(day: int, meal_type: str, part_type: str, fixed_keys: List[str]) -> bool:
+    prefix = f"{day}:{meal_type}:{part_type}:"
+    return any(key.startswith(prefix) for key in fixed_keys)
+
+
+def _reroll_parts(day: int, meal_type: str, fixed_keys: List[str]) -> List[str]:
+    mealset = _find_mealset(day, meal_type)
+    if mealset is None:
+        return []
+    changed: List[str] = []
+    for part_type in ("main", "side", "staple", "soup"):
+        if _is_fixed(day, meal_type, part_type, fixed_keys):
+            continue
+        if getattr(mealset, part_type, None) is None:
+            continue
+        before = getattr(mealset, part_type).name
+        controller.replace_meal(day=day, meal_type=meal_type, part_type=part_type)
+        after_meal = getattr(mealset, part_type, None)
+        if after_meal and after_meal.name != before:
+            changed.append(after_meal.name)
+    return changed
+
+
 @app.get("/api/health")
 def health() -> Dict[str, Any]:
     return {"ok": True}
@@ -368,6 +425,31 @@ def remove_menu_meal(req: RemoveMealRequest) -> Dict[str, Any]:
         "artifacts": _artifacts(),
         "recipes": _recipe_payload(),
     }
+
+
+@app.post("/api/menu/reroll-meal")
+def reroll_menu_meal(req: RerollMealRequest) -> Dict[str, Any]:
+    changed = _reroll_parts(req.day, req.meal_type, req.fixed_keys)
+    _persist_current_menu()
+    meal_type_cn = {"breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐"}.get(req.meal_type, req.meal_type)
+    if not changed:
+        reply = f"没有可重排的第 {req.day} 天{meal_type_cn}，可能所有菜都已固定或该餐为空。"
+    else:
+        reply = f"已重排第 {req.day} 天{meal_type_cn}，保留固定菜，并更新购物清单。"
+    return {"reply": reply, "artifacts": _artifacts(), "recipes": _recipe_payload()}
+
+
+@app.post("/api/menu/reroll-day")
+def reroll_menu_day(req: RerollDayRequest) -> Dict[str, Any]:
+    changed: List[str] = []
+    for meal_type in ("breakfast", "lunch", "dinner"):
+        changed.extend(_reroll_parts(req.day, meal_type, req.fixed_keys))
+    _persist_current_menu()
+    if not changed:
+        reply = f"没有可重排的第 {req.day} 天菜单，可能所有菜都已固定或菜单为空。"
+    else:
+        reply = f"已重排第 {req.day} 天菜单，保留固定菜，并更新购物清单。"
+    return {"reply": reply, "artifacts": _artifacts(), "recipes": _recipe_payload()}
 
 
 @app.get("/api/pantry")
